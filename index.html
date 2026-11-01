@@ -267,7 +267,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 </form></dialog>
 
 <script>
-const APPVER="v12",BOOT=location.href;
+const APPVER="v13",BOOT=location.href;
 const LEG="expense-tracker-v2",LEG1="expense-tracker-v1",CONN="ledger-conn",THM="ledger-theme",UNC="Uncategorized";
 const PAL=["#8f6334","#6b8f5e","#c9822b","#b0443a","#8a6a8f","#4f8a8b","#c26a7a","#8a9a3b","#6b5b4b","#d19a5c"];
 const DEF=["Food","Transport","Bills","Shopping","Health","Fun","Other"];
@@ -757,7 +757,14 @@ $("miSync").onclick=openSync;$("refreshBtn").onclick=()=>load(true);
 /* ---- bank SMS capture ---- */
 const IN_CATS=["Salary","Refund","Transfer","Interest","Other income"];
 const inCats=()=>[...new Set([...IN_CATS,...S.items.filter(x=>x.type==="in"&&x.cat!==UNC).map(x=>x.cat)])];
+/* clean whatever arrives: percent-encoding, "+" for spaces, hidden characters, look-alike letters */
+function cleanSms(t){t=String(t||"");
+ if(/%[0-9A-Fa-f]{2}/.test(t)){try{t=decodeURIComponent(t.replace(/\+/g," "))}catch(e){t=t.replace(/%20/gi," ").replace(/%0A/gi,"\n")}}
+ else if(!/\s/.test(t)&&/\+/.test(t))t=t.replace(/\+/g," ");
+ try{t=t.normalize("NFKC")}catch(e){}
+ return t.replace(/[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g,"").replace(/[\u2028\u2029]/g,"\n").replace(/[\u00a0\u1680\u2000-\u200a\u3000]/g," ")}
 function parseSms(t){
+ t=cleanSms(t);
  /* browsers drop line breaks from unencoded URLs, gluing lines together ("*6219To Kannur CocktailOn 31/10/26"): put the spaces back */
  t=String(t).replace(/[\r\n\t]+/g," ").replace(/(\S)(To|From|On|Ref|Not You|Call|Avl Bal)(?=[\s:.])/g,"$1 $2").replace(/\s+/g," ");
  const a=t.match(/(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i);if(!a)return null;
@@ -830,9 +837,9 @@ function renderPending(){const b=$("pend");b.innerHTML="";
  if(smFail){const f=smFail;b.appendChild(mk("h2",null,"Bank message not saved yet"));b.appendChild(mk("p","meta","The sheet couldn’t be reached. Nothing is stored on this phone, so retry before you close this page."));
   b.appendChild(line(f.amount,f.type==="in",fmt(f.dt)+" · "+f.reason,[btn("Retry","btn",()=>saveSms(f,true)),btn("×","del",()=>{if(confirm("Discard this message?")){smFail=null;renderPending()}},"Discard message")]))}
  if(smBad){const f=smBad;b.appendChild(mk("h2",null,"Message not recognised"));
-  b.appendChild(mk("p","meta","Nothing was saved. This is what the app received:"));const q=mk("p",null,f.text.slice(0,300));q.style.cssText="font-size:.85rem;background:var(--bg);border-radius:10px;padding:10px;margin:8px 0;white-space:pre-wrap;word-break:break-word";b.appendChild(q);
+  b.appendChild(mk("p","meta","Nothing was saved. This is what the app received ("+f.text.length+" characters):"));const q=mk("p",null,f.text.slice(0,300));q.style.cssText="font-size:.85rem;background:var(--bg);border-radius:10px;padding:10px;margin:8px 0;white-space:pre-wrap;word-break:break-word";b.appendChild(q);
   const r=mk("div","acts");r.style.justifyContent="flex-start";
-  r.append(btn("Add manually","btn",()=>{smBad=null;renderPending();$("amount").value=f.amt;$("amount").focus()}),btn("Dismiss","ghost",()=>{smBad=null;renderPending();window.close()}));b.appendChild(r)}
+  r.append(btn("Copy text","ghost",async()=>{const raw=JSON.stringify(f.text);try{await navigator.clipboard.writeText(raw);toast("Copied. Paste it to Claude.")}catch(e){prompt("Copy this:",raw)}}),btn("Add manually","btn",()=>{smBad=null;renderPending();$("amount").value=f.amt;$("amount").focus()}),btn("Dismiss","ghost",()=>{smBad=null;renderPending();window.close()}));b.appendChild(r)}
  if(legMiss.length){b.appendChild(mk("h2",null,"Entries from the old version"));
   b.appendChild(mk("p","meta",legMiss.length+(legMiss.length===1?" entry is":" entries are")+" still saved on this device and missing from the sheet. Upload them so the sheet has everything, then they’re removed from this device."));
   const r=mk("div","acts");r.style.justifyContent="flex-start";
@@ -856,7 +863,7 @@ function handleHash(){
  else return false;
  qs.delete("sms");qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:""));
  text=text.trim();if(!text)return false;show("add");
- const q=parseSms(text);if(!q){const a=String(text).match(/(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i);smBad={text,amt:a?a[1].replace(/,/g,""):""};renderPending();scrollTo(0,0);toast("That message doesn’t look like a payment.");return true}
+ text=cleanSms(text).trim();const q=parseSms(text);if(!q){const a=String(text).match(/(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i);smBad={text,amt:a?a[1].replace(/,/g,""):""};renderPending();scrollTo(0,0);toast("That message doesn’t look like a payment.");return true}
  saveSms({id:newId(),dt:nowLocal(),amount:q.amount,cat:UNC,reason:q.reason,type:q.dir,sms:smsHash(text)},true);return true}
 window.addEventListener("hashchange",handleHash);
 /* installed app: when MacroDroid opens a link while the app is already running, the link arrives here instead of as a page load */
