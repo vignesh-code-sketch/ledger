@@ -267,7 +267,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 </form></dialog>
 
 <script>
-const APPVER="v11",BOOT=location.href;
+const APPVER="v12",BOOT=location.href;
 const LEG="expense-tracker-v2",LEG1="expense-tracker-v1",CONN="ledger-conn",THM="ledger-theme",UNC="Uncategorized";
 const PAL=["#8f6334","#6b8f5e","#c9822b","#b0443a","#8a6a8f","#4f8a8b","#c26a7a","#8a9a3b","#6b5b4b","#d19a5c"];
 const DEF=["Food","Transport","Bills","Shopping","Health","Fun","Other"];
@@ -763,13 +763,13 @@ function parseSms(t){
  const a=t.match(/(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i);if(!a)return null;
  const amt=parseFloat(a[1].replace(/,/g,""));if(!(amt>0))return null;
  const l=t.toLowerCase(),idx=re=>{const m=l.search(re);return m<0?1e9:m};
- const ci=idx(/credited|received|deposited|credit of/),di=idx(/debited|spent|sent|paid|withdrawn|purchase|debit of/);
+ const ci=idx(/credited|received|deposited|credit of|\bcr\b/),di=idx(/debited|\bdebit\b|spent|sent|paid|withdrawn|withdrawal|transferred|purchase|\bdr\b/);
  if(ci===1e9&&di===1e9)return null;
  const dir=ci<di?"in":"out";
  const v=t.match(/VPA\s+\*?([\w.\-]+@[\w.\-]+)/i),m2=t.match(/\b(?:to|at)\s+([A-Za-z0-9][A-Za-z0-9 &.\-]{1,28}?)\s+(?:on|ref|using)\b/i);
  let who="";if(v)who=v[1];else if(m2&&!/^(a\/c|account|hdfc)/i.test(m2[1]))who=m2[1].trim();
  return{amount:amt,dir,reason:who?(dir==="in"?"From ":"To ")+who:"HDFC SMS"}}
-let sm=null,smT=null,smFail=null;
+let sm=null,smT=null,smFail=null,smBad=null;
 const smsHash=t=>{let h=5381;for(const ch of t)h=(h*33+ch.codePointAt(0))>>>0;return "s"+h.toString(36)+t.length.toString(36)};
 function stopCd(){clearInterval(smT);smT=null;$("smscd").hidden=true}
 function closeSms(){stopCd();sm=null;$("smsov").hidden=true}
@@ -829,6 +829,10 @@ function renderPending(){const b=$("pend");b.innerHTML="";
  const btn=(txt,cls,fn,lab)=>{const x=mk("button",cls,txt);x.type="button";if(cls==="btn")x.style.padding="8px 12px";if(lab)x.setAttribute("aria-label",lab);x.onclick=fn;return x};
  if(smFail){const f=smFail;b.appendChild(mk("h2",null,"Bank message not saved yet"));b.appendChild(mk("p","meta","The sheet couldn’t be reached. Nothing is stored on this phone, so retry before you close this page."));
   b.appendChild(line(f.amount,f.type==="in",fmt(f.dt)+" · "+f.reason,[btn("Retry","btn",()=>saveSms(f,true)),btn("×","del",()=>{if(confirm("Discard this message?")){smFail=null;renderPending()}},"Discard message")]))}
+ if(smBad){const f=smBad;b.appendChild(mk("h2",null,"Message not recognised"));
+  b.appendChild(mk("p","meta","Nothing was saved. This is what the app received:"));const q=mk("p",null,f.text.slice(0,300));q.style.cssText="font-size:.85rem;background:var(--bg);border-radius:10px;padding:10px;margin:8px 0;white-space:pre-wrap;word-break:break-word";b.appendChild(q);
+  const r=mk("div","acts");r.style.justifyContent="flex-start";
+  r.append(btn("Add manually","btn",()=>{smBad=null;renderPending();$("amount").value=f.amt;$("amount").focus()}),btn("Dismiss","ghost",()=>{smBad=null;renderPending();window.close()}));b.appendChild(r)}
  if(legMiss.length){b.appendChild(mk("h2",null,"Entries from the old version"));
   b.appendChild(mk("p","meta",legMiss.length+(legMiss.length===1?" entry is":" entries are")+" still saved on this device and missing from the sheet. Upload them so the sheet has everything, then they’re removed from this device."));
   const r=mk("div","acts");r.style.justifyContent="flex-start";
@@ -852,7 +856,7 @@ function handleHash(){
  else return false;
  qs.delete("sms");qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:""));
  text=text.trim();if(!text)return false;show("add");
- const q=parseSms(text);if(!q){toast("Couldn’t read that message. You can add it manually.");return false}
+ const q=parseSms(text);if(!q){const a=String(text).match(/(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i);smBad={text,amt:a?a[1].replace(/,/g,""):""};renderPending();scrollTo(0,0);toast("That message doesn’t look like a payment.");return true}
  saveSms({id:newId(),dt:nowLocal(),amount:q.amount,cat:UNC,reason:q.reason,type:q.dir,sms:smsHash(text)},true);return true}
 window.addEventListener("hashchange",handleHash);
 /* installed app: when MacroDroid opens a link while the app is already running, the link arrives here instead of as a page load */
