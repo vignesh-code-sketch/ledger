@@ -267,7 +267,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 </form></dialog>
 
 <script>
-const APPVER="v13",BOOT=location.href;
+const APPVER="v14",BOOT=location.href;
 const LEG="expense-tracker-v2",LEG1="expense-tracker-v1",CONN="ledger-conn",THM="ledger-theme",UNC="Uncategorized";
 const PAL=["#8f6334","#6b8f5e","#c9822b","#b0443a","#8a6a8f","#4f8a8b","#c26a7a","#8a9a3b","#6b5b4b","#d19a5c"];
 const DEF=["Food","Transport","Bills","Shopping","Health","Fun","Other"];
@@ -858,7 +858,9 @@ function handleHash(){
   toast("That setup link is incomplete.");return false}
  /* the message can arrive as #sms=… or ?sms=… (the installed app passes the ?sms= form more reliably) */
  const qs=new URLSearchParams(location.search),i=h.indexOf("sms=");let text;
- if(qs.has("sms")){text=qs.get("sms")||""}
+ if(qs.has("sms")){/* take everything after sms= so an "&" inside the SMS (VIEW links from MacroDroid aren't encoded) doesn't cut it short */
+  const rs=location.search,k=rs.indexOf("sms=");let raw=rs.slice(k+4).replace(/&t=[^&]*$/,"");
+  try{text=decodeURIComponent(raw.replace(/\+/g," "))}catch(e){text=raw.replace(/\+/g," ")}}
  else if(i>=0){const raw=h.slice(i+4);try{text=decodeURIComponent(raw.replace(/\+/g," "))}catch(e){text=raw}}
  else return false;
  qs.delete("sms");qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:""));
@@ -878,7 +880,7 @@ function incCard(list,cur){const b=$("inc");b.innerHTML="";b.hidden=!list.length
 /* ---- menu + themes ---- */
 const THEMES=[["sand","Sand & Beige",["#f1e8d8","#5a4430","#8f6334","#fbf6ec"]],["ocean","Ocean",["#e8f0f7","#12385c","#1d5f9e","#f8fbfe"]],["forest","Forest",["#e9f0e6","#1f4a32","#3b7a4b","#f8fbf6"]],["rose","Rose",["#f6e9ea","#6b2a3a","#b0445a","#fdf7f7"]],["lavender","Lavender",["#ede9f6","#3d2f6b","#6a4fb3","#f9f7fd"]],["graphite","Graphite",["#eceff1","#263238","#37474f","#fafbfb"]],["midnight","Midnight (dark)",["#0f1722","#1e3a5f","#5b9bff","#172232"]]];
 function closeMenu(){$("menu").hidden=true;$("menuBtn").setAttribute("aria-expanded","false")}
-$("ver").textContent="Version "+APPVER+" · opened as: "+decodeURIComponent(BOOT.replace(location.origin,"")).slice(0,90);
+$("ver").textContent="Version "+APPVER+" · opened as: "+(()=>{const u=BOOT.replace(location.origin,"");try{return decodeURIComponent(u)}catch(e){return u}})().slice(0,90);
 $("menuBtn").onclick=()=>{const o=$("menu").hidden;$("menu").hidden=!o;$("menuBtn").setAttribute("aria-expanded",o)};
 document.addEventListener("click",e=>{if(!$("mw").contains(e.target))closeMenu()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeMenu()});
