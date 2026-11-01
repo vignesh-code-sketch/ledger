@@ -142,6 +142,7 @@ input[type=date]{min-height:44px}
 .cdbar span{display:block;height:100%;width:100%;background:var(--pri)}
 .tagb{border:0;background:none;padding:2px 0 0;color:var(--pri);font-size:.78rem;font-weight:600;text-align:left;cursor:pointer}
 .fbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}.fbar select{flex:0 1 42%}.fbar input{flex:1}
+.netbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px;border-color:var(--bad);color:var(--bad);font-weight:600}
 .pendrow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .pendrow:last-child{border-bottom:0}
 @media (prefers-reduced-motion:reduce){.spin svg{animation:none}}
@@ -156,7 +157,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 <body>
 <nav class="top"><div class="bar">
   <div class="tabs" role="tablist" aria-label="View"><button role="tab" id="t-add" aria-selected="true">Add expense</button><button role="tab" id="t-dash" aria-selected="false">Dashboard</button></div>
-  <button class="nb kb" id="refreshBtn" type="button" aria-label="Refresh from Google Sheet" title="Refresh from Google Sheet"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
+  <button class="nb kb" id="refreshBtn" type="button" aria-label="Reload from Google Sheet" title="Reload from Google Sheet"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
   <div class="menuwrap" id="mw">
     <button class="nb kb" id="menuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More options"><svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true"><circle cx="9" cy="3" r="1.8"/><circle cx="9" cy="9" r="1.8"/><circle cx="9" cy="15" r="1.8"/></svg></button>
     <div class="menu" id="menu" role="menu" hidden>
@@ -168,6 +169,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 </div></nav>
 
 <main>
+<div class="netbar card" id="netbar" role="alert" hidden></div>
 <section id="v-add">
   <div class="card" id="pend" style="margin-bottom:12px" hidden></div>
   <form id="form" class="card">
@@ -215,6 +217,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
     <button type="button" class="ghost" id="scopy">Copy script</button>
     <textarea id="stxt" rows="6" readonly style="margin-top:8px"></textarea>
   </details>
+  <button type="button" class="ghost" id="slink" hidden style="margin-top:10px;width:100%">Copy setup link for another device</button>
   <div class="acts"><button type="button" class="ghost" id="sdis" hidden>Disconnect</button><button type="button" class="ghost" id="scancel">Cancel</button><button class="btn" type="submit">Save &amp; connect</button></div>
 </form></dialog>
 <div class="smsov" id="smsov" hidden><div class="smscard" role="dialog" aria-modal="true" aria-label="New bank message">
@@ -241,28 +244,38 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 </form></dialog>
 
 <script>
-const KEY="expense-tracker-v2",OLD="expense-tracker-v1";
+const LEG="expense-tracker-v2",LEG1="expense-tracker-v1",CONN="ledger-conn",THM="ledger-theme",UNC="Uncategorized";
 const PAL=["#8f6334","#6b8f5e","#c9822b","#b0443a","#8a6a8f","#4f8a8b","#c26a7a","#8a9a3b","#6b5b4b","#d19a5c"];
 const DEF=["Food","Transport","Bills","Shopping","Health","Fun","Other"];
 const $=id=>document.getElementById(id),p=n=>String(n).padStart(2,"0");
 const mk=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const sum=a=>a.reduce((s,v)=>s+v,0);
-let S={items:[],cats:{},budget:0,cur:"",sync:{url:"",key:"",pulled:false,last:0},q:[]},dirty=false;
+/* everything below lives only in memory; the Google Sheet is the single source of truth */
+let S={items:[],cats:{},budget:0,cur:"",tags:{}},dirty=false,loaded=false;
+/* only the sheet connection and the colour theme are kept on the device */
+const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const lsSet=(k,v)=>{try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
+let C={url:"",key:""};try{Object.assign(C,JSON.parse(lsGet(CONN))||{})}catch(e){}
 const money=n=>(n<0?"−":"")+S.cur+Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 const short=n=>Math.abs(n)>=1000?(n/1000).toFixed(1).replace(".0","")+"k":String(Math.round(n));
 const nowLocal=()=>{const d=new Date();return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes())};
 const fmt=dt=>new Date(dt).toLocaleString(undefined,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
-const color=c=>S.cats[c]||"#475569";
+const color=c=>S.cats[c]||"#8a8a8a";
+const newId=()=>String(Date.now()*10+Math.floor(Math.random()*10));
 function addCat(c){if(!S.cats[c])S.cats[c]=PAL[Object.keys(S.cats).length%PAL.length]}
-try{const r=JSON.parse(localStorage.getItem(KEY));
- if(r&&r.items){S=Object.assign(S,r)}
- else{const o=JSON.parse(localStorage.getItem(OLD));if(Array.isArray(o)){DEF.forEach(addCat);S.items=o.map(x=>({id:x.id,dt:x.date+"T12:00",amount:x.amount,cat:x.cat,reason:x.note||""}));S.items.forEach(x=>addCat(x.cat))}}}catch(e){}
-S.pending=S.pending||[];S.seen=S.seen||[];S.tags=S.tags||{};
-function reloadState(){try{const r=JSON.parse(localStorage.getItem(KEY));if(r&&r.items){Object.assign(S,r);S.pending=S.pending||[];S.seen=S.seen||[];S.tags=S.tags||{};if(!S.cats||!Object.keys(S.cats).length){S.cats={};DEF.forEach(addCat)}return true}}catch(e){}return false}
-document.documentElement.dataset.theme=S.tn||"sand";
-if(!Object.keys(S.cats).length)DEF.forEach(addCat);
-if(S.theme!=="sand"){Object.keys(S.cats).forEach((c,i)=>S.cats[c]=PAL[i%PAL.length]);S.theme="sand"}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));$("err").textContent=""}catch(e){$("err").textContent="Could not save. Allow site data for this file in your browser settings."}}
+function withCat(c){const o=Object.assign({},S.cats);if(!o[c])o[c]=PAL[Object.keys(o).length%PAL.length];return o}
+/* one-time move of data saved by the old version of this page */
+let legMiss=[];
+function legacy(){try{const r=JSON.parse(lsGet(LEG));if(!r)return null;
+ const its=(r.items||[]).map(x=>({id:String(x.id),dt:x.dt,amount:+x.amount,cat:x.cat||UNC,reason:x.reason||"",type:x.type==="in"?"in":"out"}))
+  .concat((r.pending||[]).map(x=>({id:String(x.id),dt:x.dt,amount:+x.amount,cat:UNC,reason:x.reason||"",type:x.dir==="in"?"in":"out"})));
+ return{its,r}}catch(e){return null}}
+(()=>{const L=legacy();if(!L)return;
+ if(!C.url&&L.r.sync&&L.r.sync.url){C={url:L.r.sync.url,key:L.r.sync.key||""};lsSet(CONN,JSON.stringify(C))}
+ if(L.r.tn&&!lsGet(THM))lsSet(THM,L.r.tn)})();
+lsSet(LEG1,null);
+document.documentElement.dataset.theme=lsGet(THM)||"sand";
+
 
 /* ---- month maths ---- */
 const ymOf=d=>d.getFullYear()+"-"+p(d.getMonth()+1);
@@ -283,7 +296,7 @@ const taggable=pt=>!!pt&&pkey(pt)!=="hdfc sms";
 const tagsOf=x=>{const pt=partyOf(x);return taggable(pt)?S.tags[pkey(pt)]||[]:[]};
 const parseTags=v=>[...new Set(String(v).split(/[,#]/).map(t=>t.trim().toLowerCase()).filter(Boolean))].slice(0,8);
 const allTags=()=>[...new Set(Object.values(S.tags).flat())].sort();
-function setTags(pt,list){const k=pkey(pt);if(!taggable(pt))return;if(list.length)S.tags[k]=list;else delete S.tags[k];save();queueSettings()}
+function setTags(pt,list){const k=pkey(pt);if(!taggable(pt))return;const t=Object.assign({},S.tags);if(list.length)t[k]=list;else delete t[k];return setSettings({tags:JSON.stringify(t)})}
 
 /* ---- add view ---- */
 let curCat="Food";
@@ -301,11 +314,13 @@ function renderCats(){
  names.forEach(nm=>{const r=mk("div","dd-row"),i=mk("button","dd-item"),d=mk("span","dot");d.style.background=color(nm);i.type="button";i.setAttribute("role","option");i.append(d,mk("span",null,nm));
   i.onclick=()=>{curCat=nm;closeDd();renderCats()};
   const m=mk("button","minus","−");m.type="button";m.setAttribute("aria-label","Remove "+nm);
-  m.onclick=e=>{e.stopPropagation();if(confirm('Remove "'+nm+'"? Past expenses keep their category name.')){delete S.cats[nm];save();queueSettings();renderCats();if(!$("v-dash").hidden)renderDash()}};
+  m.onclick=e=>{e.stopPropagation();if(confirm('Remove "'+nm+'"? Past expenses keep their category name.')){const c=Object.assign({},S.cats);delete c[nm];setSettings({cats:JSON.stringify(c)})}};
   r.append(i,m);l.appendChild(r)});
  const a=mk("button","dd-add","+ Add new category…");a.type="button";a.onclick=()=>{closeDd();$("newcat").classList.add("on");$("newname").focus()};l.appendChild(a)}
-function saveCat(){const name=$("newname").value.trim();if(!name){$("err").textContent="Type a category name first.";return}
- const f=Object.keys(S.cats).find(c=>c.toLowerCase()===name.toLowerCase()),use=f||name;addCat(use);curCat=use;save();queueSettings();$("newname").value="";$("newcat").classList.remove("on");renderCats();$("err").textContent=""}
+async function saveCat(){const name=$("newname").value.trim();if(!name){$("err").textContent="Type a category name first.";return}
+ const f=Object.keys(S.cats).find(c=>c.toLowerCase()===name.toLowerCase()),use=f||name;$("err").textContent="";
+ if(f){curCat=f;renderCats();$("newname").value="";$("newcat").classList.remove("on");return}
+ if(await setSettings({cats:JSON.stringify(withCat(use))})){curCat=use;$("newname").value="";$("newcat").classList.remove("on");renderCats()}}
 $("savecat").onclick=saveCat;
 $("newname").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();saveCat()}};
 let tH="00",tM="00";
@@ -315,19 +330,23 @@ function renderTime(){const b=$("timeBtn");b.innerHTML="";b.append(mk("span",nul
   for(let i=0;i<n;i++){const v=p(i),o=mk("button","topt"+(v===cur?" on":""),v);o.type="button";o.onclick=e=>{e.stopPropagation();set(v);dirty=true;renderTime();scrollSel()};c.appendChild(o)}})}
 function initTime(){$("d").addEventListener("input",()=>dirty=true);$("d").addEventListener("click",()=>{try{$("d").showPicker()}catch(e){}})}
 const resetDt=()=>{const v=nowLocal();$("d").value=v.slice(0,10);tH=v.slice(11,13);tM=v.slice(14,16);dirty=false;renderTime()};
-$("form").onsubmit=e=>{e.preventDefault();const amount=parseFloat($("amount").value),cat=curCat;
+$("form").onsubmit=async e=>{e.preventDefault();const amount=parseFloat($("amount").value),cat=curCat;
  if(!(amount>0)){$("err").textContent="Enter an amount greater than 0.";return}
  if(!cat){$("err").textContent="Add a category first.";return}
  if(!$("d").value){$("err").textContent="Pick a date.";return}
- const it={id:Date.now(),dt:$("d").value+"T"+tH+":"+tM,amount,cat,reason:$("reason").value.trim(),type:"out"};S.items.push(it);save();enqueue({t:"add",item:it});
- $("amount").value="";$("reason").value="";resetDt();$("amount").focus();renderStrip();renderRecent()};
+ if(!C.url){openSync();return}
+ $("err").textContent="";const sb=$("form").querySelector("[type=submit]");sb.disabled=true;sb.textContent="Saving to sheet…";
+ const it={id:newId(),dt:$("d").value+"T"+tH+":"+tM,amount,cat,reason:$("reason").value.trim(),type:"out"};
+ const ok=await api([{t:"add",item:it}]);sb.disabled=false;sb.textContent="Add expense";
+ if(!ok){$("err").textContent="Not saved: couldn’t reach the sheet. Your entry is still in the form, so try again.";return}
+ $("amount").value="";$("reason").value="";resetDt();$("amount").focus();toast("Saved to the sheet")};
 function rowFor(x,del=true){const r=mk("div","row"),t=mk("div"),d=mk("span","dot");d.style.background=x.type==="in"?"var(--ok)":color(x.cat);
  t.append(mk("div","note",x.reason||x.cat),mk("div","meta",(x.reason?x.cat+" · ":"")+fmt(x.dt)));const am=mk("span","amt",(x.type==="in"?"+":"")+money(x.amount));if(x.type==="in")am.style.color="var(--ok)";const pt=partyOf(x);if(taggable(pt)){const tg=tagsOf(x),tb=mk("button","tagb",tg.length?tg.map(v=>"#"+v).join(" "):"+ tag");tb.type="button";tb.title="Tags for "+pt;
-  tb.onclick=()=>{const v=prompt("Tags for "+pt+" (comma-separated)",tg.join(", "));if(v===null)return;setTags(pt,parseTags(v));renderAll()};t.appendChild(tb)}
+  tb.onclick=()=>{const v=prompt("Tags for "+pt+" (comma-separated)",tg.join(", "));if(v===null)return;setTags(pt,parseTags(v))};t.appendChild(tb)}
  r.append(d,t,am);
- if(del){const b=mk("button","del","×");b.type="button";b.setAttribute("aria-label","Delete expense");b.onclick=()=>{S.items=S.items.filter(y=>y.id!==x.id);save();enqueue({t:"del",id:x.id});renderStrip();renderRecent();if(!$("v-dash").hidden)renderDash()};r.appendChild(b)}else r.style.gridTemplateColumns="auto 1fr auto";return r}
+ if(del){const b=mk("button","del","×");b.type="button";b.setAttribute("aria-label","Delete expense");b.onclick=()=>{if(confirm("Delete this entry from the sheet?"))api([{t:"del",id:x.id}])};r.appendChild(b)}else r.style.gridTemplateColumns="auto 1fr auto";return r}
 function renderRecent(){const b=$("recent");b.innerHTML="";const l=[...S.items].sort((a,b)=>b.dt.localeCompare(a.dt)||b.id-a.id).slice(0,5);
- if(!l.length)b.appendChild(mk("p","empty","Your entries will show up here."));l.forEach(x=>b.appendChild(rowFor(x)))}
+ if(!l.length)b.appendChild(mk("p","empty",loaded?"Your entries will show up here.":C.url?"Loading from your sheet…":"Connect a Google Sheet to start: ⋮ › Google Sheet sync."));l.forEach(x=>b.appendChild(rowFor(x)))}
 function renderStrip(){}
 
 /* ---- dashboard ---- */
@@ -471,36 +490,52 @@ $("m-month").onclick=()=>setMode("month");$("m-range").onclick=()=>setMode("rang
 $("rf").onchange=()=>{rf=$("rf").value||rf;renderDash()};$("rt").onchange=()=>{rt=$("rt").value||rt;renderDash()};
 document.querySelectorAll("#rng [data-d]").forEach(b=>b.onclick=()=>{const k=b.dataset.d,t=new Date();rt=ymd(t);rf=k==="ytd"?ymd(new Date(t.getFullYear(),0,1)):addDays(rt,-(+k-1));renderDash()});
 
-/* ---- Google Sheet sync ---- */
+/* ---- Google Sheet: every read and write goes straight to the sheet ---- */
 const SCRIPT=`// Ledger sync - paste into Extensions > Apps Script, then Deploy > Web app
 var SECRET = '__SECRET__';
-var EX = ['id', 'date_time', 'amount', 'category', 'reason', 'type'];
+var EX = ['id', 'date_time', 'amount', 'category', 'reason', 'type', 'sms_id'];
+function ss_() { return SpreadsheetApp.getActive(); }
 function sheet_(name, head) {
-  var s = SpreadsheetApp.getActive().getSheetByName(name);
+  var s = ss_().getSheetByName(name);
   if (!s) {
-    s = SpreadsheetApp.getActive().insertSheet(name);
+    s = ss_().insertSheet(name);
     s.appendRow(head);
     s.setFrozenRows(1);
-    if (name === 'Expenses') { s.getRange('B:B').setNumberFormat('@'); s.getRange('D:E').setNumberFormat('@'); }
+    if (name === 'Expenses') { s.getRange('B:B').setNumberFormat('@'); s.getRange('D:E').setNumberFormat('@'); s.getRange('G:G').setNumberFormat('@'); }
     else { s.getRange('A:B').setNumberFormat('@'); }
   }
-  if (name === 'Expenses' && !s.getRange(1, 6).getValue()) s.getRange(1, 6).setValue('type');
+  if (name === 'Expenses') {
+    var h = s.getRange(1, 1, 1, EX.length).getValues()[0];
+    for (var i = 0; i < EX.length; i++) if (!h[i]) s.getRange(1, i + 1).setValue(EX[i]);
+  }
   return s;
 }
 function out_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
+function newId_() { return Date.now() * 10 + Math.floor(Math.random() * 10); }
+function rows_(s) {
+  var last = s.getLastRow();
+  return last > 1 ? s.getRange(2, 1, last - 1, EX.length).getValues() : [];
+}
+function settings_() {
+  var st = sheet_('Settings', ['key', 'value']), o = {};
+  if (st.getLastRow() > 1) st.getRange(2, 1, st.getLastRow() - 1, 2).getValues().forEach(function (r) { if (r[0] !== '') o[r[0]] = r[1]; });
+  return o;
+}
+function data_() {
+  var tz = ss_().getSpreadsheetTimeZone(), s = sheet_('Expenses', EX), items = [];
+  rows_(s).forEach(function (r, i) {
+    if (r[1] === '' && r[2] === '') return;
+    if (r[0] === '') { r[0] = newId_(); s.getRange(i + 2, 1).setValue(r[0]); }
+    var dt = r[1] instanceof Date ? Utilities.formatDate(r[1], tz, "yyyy-MM-dd'T'HH:mm") : String(r[1]);
+    items.push({id: String(r[0]), dt: dt, amount: Number(r[2]), cat: String(r[3]), reason: String(r[4]), type: String(r[5] || '')});
+  });
+  return {items: items, settings: settings_()};
+}
 function doGet(e) {
   if (e.parameter.key !== SECRET) return out_({error: 'unauthorized'});
-  var tz = Session.getScriptTimeZone();
-  var rows = sheet_('Expenses', EX).getDataRange().getValues().slice(1);
-  var items = rows.filter(function (r) { return r[0] !== ''; }).map(function (r) {
-    var dt = r[1] instanceof Date ? Utilities.formatDate(r[1], tz, "yyyy-MM-dd'T'HH:mm") : String(r[1]);
-    return {id: Number(r[0]), dt: dt, amount: Number(r[2]), cat: String(r[3]), reason: String(r[4]), type: String(r[5] || '')};
-  });
-  var settings = {};
-  sheet_('Settings', ['key', 'value']).getDataRange().getValues().slice(1).forEach(function (r) { settings[r[0]] = r[1]; });
-  return out_({items: items, settings: settings});
+  return out_(data_());
 }
 function doPost(e) {
   var d = JSON.parse(e.postData.contents);
@@ -508,77 +543,87 @@ function doPost(e) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var s = sheet_('Expenses', EX);
+    var s = sheet_('Expenses', EX), dups = {};
     (d.ops || []).forEach(function (op) {
-      var ids = s.getRange(1, 1, s.getLastRow(), 1).getValues().map(function (r) { return String(r[0]); });
+      var rows = rows_(s);
+      var find = function (id) { for (var i = 0; i < rows.length; i++) if (String(rows[i][0]) === String(id)) return i + 2; return -1; };
       if (op.t === 'add') {
-        if (ids.indexOf(String(op.item.id)) < 0) s.appendRow([op.item.id, op.item.dt, op.item.amount, op.item.cat, op.item.reason, op.item.type || '']);
+        var it = op.item;
+        if (find(it.id) > 0) return;
+        if (it.sms) for (var j = 0; j < rows.length; j++) if (String(rows[j][6]) === String(it.sms)) { dups[it.sms] = String(rows[j][0]); return; }
+        s.appendRow([it.id, it.dt, it.amount, it.cat, it.reason, it.type || '', it.sms || '']);
       } else if (op.t === 'del') {
-        var i = ids.indexOf(String(op.id));
-        if (i > 0) s.deleteRow(i + 1);
+        var r = find(op.id);
+        if (r > 0) s.deleteRow(r);
+      } else if (op.t === 'upd') {
+        var r2 = find(op.id), col = {dt: 2, amount: 3, cat: 4, reason: 5, type: 6};
+        if (r2 > 0) Object.keys(op.fields || {}).forEach(function (k) { if (col[k]) s.getRange(r2, col[k]).setValue(op.fields[k]); });
       } else if (op.t === 'set') {
-        var st = sheet_('Settings', ['key', 'value']);
-        var keys = Object.keys(op.settings);
+        var st = sheet_('Settings', ['key', 'value']), cur = settings_();
+        Object.keys(op.settings).forEach(function (k) { cur[k] = String(op.settings[k]); });
+        var keys = Object.keys(cur);
         if (st.getLastRow() > 1) st.getRange(2, 1, st.getLastRow() - 1, 2).clearContent();
-        st.getRange(2, 1, keys.length, 2).setValues(keys.map(function (k) { return [k, String(op.settings[k])]; }));
+        if (keys.length) st.getRange(2, 1, keys.length, 2).setValues(keys.map(function (k) { return [k, cur[k]]; }));
       }
     });
-    return out_({ok: true});
+    SpreadsheetApp.flush();
+    var o = data_();
+    o.dups = dups;
+    return out_(o);
   } finally {
     lock.releaseLock();
   }
 }`;
-const syncOn=()=>!!(S.sync&&S.sync.url);
-let flushing=null,warned=false,lastErr="",tt;
-function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,3800)}
-function updPending(){const n=S.q.length,b=$("refreshBtn");b.classList.toggle("pend",syncOn()&&n>0);b.title=syncOn()?(n?n+(n===1?" change":" changes")+" waiting to sync":"Refresh from Google Sheet"):"Connect a Google Sheet"}
-function queueSettings(){if(!syncOn())return;if(!flushing)S.q=S.q.filter(o=>o.t!=="set");S.q.push({t:"set",settings:{budget:S.budget,cur:S.cur,cats:JSON.stringify(S.cats),tags:JSON.stringify(S.tags)}});save();flush().then(afterFlush)}
-function enqueue(op){if(!syncOn())return;S.q.push(op);save();flush().then(afterFlush)}
-function afterFlush(ok){updPending();if(ok)warned=false;else if(!warned){warned=true;toast("Saved on this device. It will sync when the sheet is reachable.")}}
-function flush(){if(!flushing)flushing=doFlush().finally(()=>{flushing=null});return flushing}
-async function doFlush(){
- try{while(S.q.length){const ops=S.q.slice(),r=await fetch(S.sync.url,{method:"POST",body:JSON.stringify({key:S.sync.key,ops})}),j=await r.json();
-   if(j.error)throw new Error(j.error);const sent=new Set(ops);S.q=S.q.filter(o=>!sent.has(o));save()}return true}
- catch(e){lastErr=e;return false}}
-function errMsg(e){return e&&e.message==="unauthorized"?"Wrong secret key. Check it matches the script.":e instanceof SyntaxError?"Couldn’t read the sheet’s reply. Deploy the script as a web app open to Anyone.":"Couldn’t reach the Google Sheet. Your data is safe on this device."}
+let busy=0,tt;
+function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,4200)}
+function spin(k){busy+=k;$("refreshBtn").classList.toggle("spin",busy>0)}
+function net(msg,retry){const b=$("netbar");b.innerHTML="";b.hidden=!msg;if(!msg)return;b.appendChild(mk("span",null,msg));
+ if(retry){const r=mk("button","ghost","Retry");r.type="button";r.onclick=retry;b.appendChild(r)}}
+function errMsg(e){return e&&e.message==="unauthorized"?"Failed to connect to sheet: the secret key doesn’t match the script.":e instanceof SyntaxError?"Failed to connect to sheet: deploy the script as a web app open to Anyone.":"Failed to connect to sheet. Nothing was changed."}
+async function call(body){
+ if(!C.url){openSync();const e=new Error("noconn");throw e}
+ const ac=new AbortController(),to=setTimeout(()=>ac.abort(),25000);spin(1);
+ try{const r=body?await fetch(C.url,{method:"POST",body:JSON.stringify(Object.assign({key:C.key},body)),signal:ac.signal})
+   :await fetch(C.url+"?key="+encodeURIComponent(C.key)+"&t="+Date.now(),{signal:ac.signal,cache:"no-store"});
+  const j=await r.json();if(j.error)throw new Error(j.error);return j}
+ finally{clearTimeout(to);spin(-1)}}
+function fail(e,retry,quiet){if(e&&e.message==="noconn")return;const m=errMsg(e);net(m,retry);if(!quiet)toast(m)}
+function apply(j){
+ const items=[];(j.items||[]).forEach(x=>{let dt=String(x.dt||"").trim().replace(" ","T");if(/^\d{4}-\d{2}-\d{2}$/.test(dt))dt+="T00:00";dt=dt.slice(0,16);const a=Number(x.amount);
+  if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dt)&&a>0)items.push({id:String(x.id),dt,amount:a,cat:String(x.cat||"").trim()||UNC,reason:String(x.reason||""),type:/^(in|credit)$/i.test(String(x.type).trim())?"in":"out"})});
+ S.items=items;const st=j.settings||{};
+ let c={};try{c=JSON.parse(st.cats||"{}")}catch(e){}S.cats=c&&typeof c==="object"?c:{};delete S.cats[UNC];if(!Object.keys(S.cats).length)DEF.forEach(addCat);
+ let t={};try{t=JSON.parse(st.tags||"{}")}catch(e){}S.tags=t&&typeof t==="object"?t:{};
+ S.budget=+st.budget||0;S.cur=st.cur||"";loaded=true;
+ const L=legacy();if(L){const have=new Set(items.map(x=>x.id));legMiss=L.its.filter(x=>x.amount>0&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(x.dt||"")&&!have.has(x.id));if(!legMiss.length)lsSet(LEG,null)}
+ renderAll()}
+/* write: send the change, then redraw from what the sheet returns */
+async function api(ops){try{const j=await call({ops});net("");apply(j);return j}catch(e){fail(e);return null}}
+/* read only */
+async function load(manual,quiet){try{const j=await call(null);net("");apply(j);if(manual)toast("Up to date with the sheet");return true}catch(e){fail(e,()=>load(true),quiet);return false}}
+const setSettings=o=>api([{t:"set",settings:o}]);
 function renderAll(){renderCats();renderRecent();renderPending();updBudgetBtn();if(!$("v-dash").hidden)renderDash()}
-async function refresh(first){
- reloadState();if(!syncOn()){openSync();return}
- const b=$("refreshBtn");if(b.classList.contains("spin"))return;b.classList.add("spin");
- try{
-  if(!(await flush()))throw lastErr||new Error("offline");
-  const r=await fetch(S.sync.url+"?key="+encodeURIComponent(S.sync.key)),j=await r.json();if(j.error)throw new Error(j.error);
-  const items=[];(j.items||[]).forEach(x=>{const dt=String(x.dt).replace(" ","T").slice(0,16),a=Number(x.amount);if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dt)&&a>0)items.push(Object.assign({id:Number(x.id),dt,amount:a,cat:String(x.cat),reason:String(x.reason||"")},{type:x.type==="in"?"in":"out"}))});
-  const ids=new Set(items.map(x=>x.id)),miss=S.items.filter(x=>!ids.has(x.id));miss.forEach(x=>{items.push(x);S.q.push({t:"add",item:x})});
-  S.items=items;
-  const st=j.settings||{};
-  if(st.cats){try{const c=JSON.parse(st.cats);if(c&&typeof c==="object"&&Object.keys(c).length)S.cats=c}catch(e){}S.budget=+st.budget||0;S.cur=st.cur||""}
-  if(st.tags){try{const t=JSON.parse(st.tags);if(t&&typeof t==="object")S.tags=t}catch(e){}}
-  if(!st.cats?first:(!st.tags&&Object.keys(S.tags).length))S.q.push({t:"set",settings:{budget:S.budget,cur:S.cur,cats:JSON.stringify(S.cats),tags:JSON.stringify(S.tags)}});
-  S.sync.pulled=true;S.sync.last=Date.now();save();renderAll();
-  toast(first?"Connected and synced":miss.length?"Synced. Sent "+miss.length+(miss.length===1?" entry that was":" entries that were")+" missing from the sheet.":"Synced with Google Sheet");
-  if(S.q.length)flush().then(afterFlush);
- }catch(e){toast(errMsg(e))}
- finally{b.classList.remove("spin");updPending()}
-}
 function scriptText(){return SCRIPT.replace("__SECRET__",($("skey").value||"your-secret").replace(/[^A-Za-z0-9_-]/g,""))}
 function rand(){const a=new Uint8Array(12);crypto.getRandomValues(a);return Array.from(a,x=>"abcdefghjkmnpqrstuvwxyz23456789"[x%31]).join("")}
-function openSync(){closeMenu();$("surl").value=S.sync.url||"";$("skey").value=S.sync.key||rand();$("stxt").value=scriptText();$("serr").textContent="";
- $("sstat").textContent=syncOn()?"Connected"+(S.sync.last?" · last synced "+new Date(S.sync.last).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",hour12:false}):"")+(S.q.length?" · "+S.q.length+" pending":""):"Not connected";
- $("sdis").hidden=!syncOn();$("sdlg").showModal()}
-$("sf").onsubmit=e=>{e.preventDefault();const url=$("surl").value.trim(),key=$("skey").value.trim();
+const setupLink=()=>location.origin+location.pathname+"#connect="+encodeURIComponent(C.url)+"|"+encodeURIComponent(C.key);
+function openSync(){closeMenu();$("surl").value=C.url||"";$("skey").value=C.key||rand();$("stxt").value=scriptText();$("serr").textContent="";
+ $("sstat").textContent=C.url?"Connected. All entries are read from and written to this sheet.":"Not connected";
+ $("sdis").hidden=$("slink").hidden=!C.url;if(!$("sdlg").open)$("sdlg").showModal()}
+function connect(url,key){C={url,key};lsSet(CONN,JSON.stringify(C));return load(false)}
+$("sf").onsubmit=async e=>{e.preventDefault();const url=$("surl").value.trim(),key=$("skey").value.trim();
  if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){$("serr").textContent="Paste the Web app URL, which ends in /exec.";return}
  if(!/^[A-Za-z0-9_-]{6,}$/.test(key)){$("serr").textContent="Secret needs at least 6 letters or numbers, with no spaces.";return}
- S.sync={url,key,pulled:false,last:0};S.q=[];save();$("sdlg").close();refresh(true)};
+ $("sdlg").close();if(await connect(url,key)){toast("Connected to your sheet");if(smFail)saveSms(smFail)}};
 $("skey").oninput=()=>$("stxt").value=scriptText();
 $("scopy").onclick=async()=>{const t=$("stxt");t.value=scriptText();try{await navigator.clipboard.writeText(t.value);toast("Script copied")}catch(e){t.select();toast("Select and copy the script")}};
-$("sdis").onclick=()=>{S.sync={url:"",key:"",pulled:false,last:0};S.q=[];save();$("sdlg").close();updPending();toast("Disconnected. Your data stays on this device.")};
+$("slink").onclick=async()=>{try{await navigator.clipboard.writeText(setupLink());toast("Setup link copied. Open it on your other device.")}catch(e){prompt("Copy this link and open it on your other device:",setupLink())}};
+$("sdis").onclick=()=>{C={url:"",key:""};lsSet(CONN,null);S={items:[],cats:{},budget:0,cur:"",tags:{}};DEF.forEach(addCat);loaded=false;$("sdlg").close();renderAll();net("Not connected to a sheet. Open ⋮ › Google Sheet sync.")};
 $("scancel").onclick=()=>$("sdlg").close();
-$("miSync").onclick=openSync;$("refreshBtn").onclick=()=>refresh(false);
+$("miSync").onclick=openSync;$("refreshBtn").onclick=()=>load(true);
 
 /* ---- bank SMS capture ---- */
 const IN_CATS=["Salary","Refund","Transfer","Interest","Other income"];
-const inCats=()=>[...new Set([...IN_CATS,...S.items.filter(x=>x.type==="in").map(x=>x.cat)])];
+const inCats=()=>[...new Set([...IN_CATS,...S.items.filter(x=>x.type==="in"&&x.cat!==UNC).map(x=>x.cat)])];
 function parseSms(t){
  /* browsers drop line breaks from unencoded URLs, gluing lines together ("*6219To Kannur CocktailOn 31/10/26"): put the spaces back */
  t=String(t).replace(/[\r\n\t]+/g," ").replace(/(\S)(To|From|On|Ref|Not You|Call|Avl Bal)(?=[\s:.])/g,"$1 $2").replace(/\s+/g," ");
@@ -591,56 +636,77 @@ function parseSms(t){
  const v=t.match(/VPA\s+\*?([\w.\-]+@[\w.\-]+)/i),m2=t.match(/\b(?:to|at)\s+([A-Za-z0-9][A-Za-z0-9 &.\-]{1,28}?)\s+(?:on|ref|using)\b/i);
  let who="";if(v)who=v[1];else if(m2&&!/^(a\/c|account|hdfc)/i.test(m2[1]))who=m2[1].trim();
  return{amount:amt,dir,reason:who?(dir==="in"?"From ":"To ")+who:"HDFC SMS"}}
-let sm=null,smT=null;
+let sm=null,smT=null,smFail=null;
+const smsHash=t=>{let h=5381;for(const ch of t)h=(h*33+ch.codePointAt(0))>>>0;return "s"+h.toString(36)+t.length.toString(36)};
 function stopCd(){clearInterval(smT);smT=null;$("smscd").hidden=true}
 function closeSms(){stopCd();sm=null;$("smsov").hidden=true}
-function renderChips(){const c=$("smschips");c.innerHTML="";const names=sm.it.dir==="in"?inCats():Object.keys(S.cats);
+function renderChips(){const c=$("smschips");c.innerHTML="";const names=sm.it.type==="in"?inCats():Object.keys(S.cats);
  names.forEach(n=>{const b=mk("button","chip2"+(sm.cat===n?" on":""),n);b.type="button";b.onclick=()=>{stopCd();sm.cat=n;$("smsnew").classList.remove("on");$("smsok").disabled=false;renderChips()};c.appendChild(b)});
  const o=mk("button","chip2","+ New");o.type="button";o.onclick=()=>{stopCd();sm.cat="";$("smsnew").classList.add("on");$("smsnn").focus();$("smsok").disabled=!$("smsnn").value.trim();renderChips()};c.appendChild(o)}
 function showSms(it,auto){
- sm={it,cat:""};$("smsov").hidden=false;const inn=it.dir==="in";
+ sm={it,cat:""};$("smsov").hidden=false;const inn=it.type==="in";
  $("smsk").textContent=inn?"HDFC · money received":"HDFC · money spent";
  $("smsamt").textContent=(inn?"+":"−")+money(it.amount);$("smsamt").style.color=inn?"var(--ok)":"var(--ink)";
  $("smsmeta").textContent=new Date(it.dt).toLocaleString(undefined,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hour12:false})+" · "+it.reason;
  const pt=partyOf(it),tw=taggable(pt);$("smstagw").hidden=!tw;$("smstags").value=tw?(S.tags[pkey(pt)]||[]).join(", "):"";$("smstags").placeholder=tw?"Tags for "+pt+" (e.g. friends, bar)":"";
  $("smsnew").classList.remove("on");$("smsnn").value="";$("smsok").disabled=true;renderChips();stopCd();
- if(auto){const end=Date.now()+10000,tick=()=>{const r=Math.max(end-Date.now(),0);$("cdfill").style.width=r/100+"%";$("cdtxt").textContent="Saving to pending in "+Math.ceil(r/1000)+"s";if(r<=0)dismissSms()};
+ if(auto){const end=Date.now()+10000,tick=()=>{const r=Math.max(end-Date.now(),0);$("cdfill").style.width=r/100+"%";$("cdtxt").textContent="Saved in the sheet. Closing in "+Math.ceil(r/1000)+"s; categorize it later if you like.";if(r<=0)dismissSms()};
   $("smscd").hidden=false;tick();smT=setInterval(tick,100)}}
-function saveSmsTags(it){const pt=partyOf(it);if(!taggable(pt))return;const nv=parseTags($("smstags").value),ov=S.tags[pkey(pt)]||[];if(nv.join()!==ov.join())setTags(pt,nv)}
+function tagOps(it){const pt=partyOf(it);if(!taggable(pt))return[];const nv=parseTags($("smstags").value),ov=S.tags[pkey(pt)]||[];if(nv.join()===ov.join())return[];
+ const t=Object.assign({},S.tags);if(nv.length)t[pkey(pt)]=nv;else delete t[pkey(pt)];return[{t:"set",settings:{tags:JSON.stringify(t)}}]}
 $("smstags").oninput=stopCd;
-function dismissSms(){if(!sm)return;saveSmsTags(sm.it);const it=sm.it,had=S.pending.some(p=>p.id===it.pid);
- if(!had){S.pending.push({id:it.pid,dt:it.dt,amount:it.amount,dir:it.dir,reason:it.reason});save()}
- closeSms();renderPending();if(!had)toast("Saved to pending. Pick a category when you’re ready.")}
+/* the row is already in the sheet as Uncategorized; closing just leaves it there */
+function dismissSms(){if(!sm)return;const ops=tagOps(sm.it);closeSms();if(ops.length)api(ops);toast("Kept in the sheet as uncategorized.")}
 $("smsx").onclick=dismissSms;
 $("smsnn").oninput=()=>{stopCd();$("smsok").disabled=!$("smsnn").value.trim()};
-$("smsok").onclick=()=>{if(!sm)return;const it=sm.it;let cat=sm.cat;saveSmsTags(it);
+$("smsok").onclick=async()=>{if(!sm)return;const it=sm.it;let cat=sm.cat;
  if($("smsnew").classList.contains("on")){cat=$("smsnn").value.trim();if(!cat)return}
- if(it.dir==="out"){const f=Object.keys(S.cats).find(c=>c.toLowerCase()===cat.toLowerCase());cat=f||cat;if(!S.cats[cat]){addCat(cat);queueSettings()}}
- const row={id:Date.now(),dt:it.dt,amount:it.amount,cat,reason:it.reason,type:it.dir==="in"?"in":"out"};
- S.items.push(row);S.pending=S.pending.filter(p=>p.id!==it.pid);save();enqueue({t:"add",item:row});
- closeSms();renderCats();renderRecent();renderPending();if(!$("v-dash").hidden)renderDash();
- toast("Recorded "+(it.dir==="in"?"+":"")+money(it.amount)+" under "+cat)};
-function renderPending(){const b=$("pend");b.innerHTML="";b.hidden=!S.pending.length;if(!S.pending.length)return;
- b.appendChild(mk("h2",null,"Waiting for a category ("+S.pending.length+")"));
- S.pending.forEach(p=>{const r=mk("div","pendrow"),t=mk("div"),inn=p.dir==="in",a=mk("div","amt",(inn?"+":"−")+money(p.amount));a.style.color=inn?"var(--ok)":"var(--ink)";
-  t.append(a,mk("div","meta",fmt(p.dt)+" · "+p.reason));
-  const c=mk("button","btn","Categorize");c.type="button";c.style.padding="8px 12px";c.onclick=()=>showSms({pid:p.id,dt:p.dt,amount:p.amount,dir:p.dir,reason:p.reason},false);
-  const x=mk("button","del","×");x.type="button";x.setAttribute("aria-label","Discard message");x.onclick=()=>{if(confirm("Discard this message?")){S.pending=S.pending.filter(y=>y.id!==p.id);save();renderPending()}};
-  r.append(t,c,x);b.appendChild(r)})}
+ const ops=[];
+ if(it.type!=="in"){const f=Object.keys(S.cats).find(c=>c.toLowerCase()===cat.toLowerCase());cat=f||cat;if(!S.cats[cat])ops.push({t:"set",settings:{cats:JSON.stringify(withCat(cat))}})}
+ ops.unshift({t:"upd",id:it.id,fields:{cat}});ops.push(...tagOps(it));
+ stopCd();$("smsok").disabled=true;$("smsok").textContent="Saving…";
+ const j=await api(ops);$("smsok").textContent="OK";
+ if(!j){$("smsok").disabled=false;return}
+ closeSms();toast("Recorded "+(it.type==="in"?"+":"")+money(it.amount)+" under "+cat)};
+async function saveSms(it){
+ if(!C.url){smFail=it;renderPending();openSync();return}
+ const j=await api([{t:"add",item:it}]);
+ if(!j){smFail=it;renderPending();return}
+ smFail=null;const dup=j.dups&&j.dups[it.sms],row=S.items.find(x=>x.id===(dup||it.id));renderPending();
+ if(dup&&(!row||row.cat!==UNC)){toast("This message is already in the sheet.");return}
+ if(row)showSms(row,!dup)}
+function renderPending(){const b=$("pend");b.innerHTML="";
+ const line=(amt,inn,meta,btns)=>{const r=mk("div","pendrow"),t=mk("div"),a=mk("div","amt",(inn?"+":"−")+money(amt));a.style.color=inn?"var(--ok)":"var(--ink)";t.append(a,mk("div","meta",meta));r.append(t,...btns);return r};
+ const btn=(txt,cls,fn,lab)=>{const x=mk("button",cls,txt);x.type="button";if(cls==="btn")x.style.padding="8px 12px";if(lab)x.setAttribute("aria-label",lab);x.onclick=fn;return x};
+ if(smFail){const f=smFail;b.appendChild(mk("h2",null,"Bank message not saved yet"));b.appendChild(mk("p","meta","The sheet couldn’t be reached. Nothing is stored on this phone, so retry before you close this page."));
+  b.appendChild(line(f.amount,f.type==="in",fmt(f.dt)+" · "+f.reason,[btn("Retry","btn",()=>saveSms(f)),btn("×","del",()=>{if(confirm("Discard this message?")){smFail=null;renderPending()}},"Discard message")]))}
+ if(legMiss.length){b.appendChild(mk("h2",null,"Entries from the old version"));
+  b.appendChild(mk("p","meta",legMiss.length+(legMiss.length===1?" entry is":" entries are")+" still saved on this device and missing from the sheet. Upload them so the sheet has everything, then they’re removed from this device."));
+  const r=mk("div","acts");r.style.justifyContent="flex-start";
+  r.append(btn("Upload to sheet","btn",async()=>{const L=legacy(),ops=legMiss.map(x=>({t:"add",item:x}));
+   if(L&&L.r.tags&&Object.keys(L.r.tags).length)ops.push({t:"set",settings:{tags:JSON.stringify(Object.assign({},L.r.tags,S.tags))}});
+   const n=legMiss.length;if(await api(ops)){toast("Uploaded "+n+(n===1?" entry":" entries")+" to the sheet")}}),
+   btn("Delete from device","ghost",()=>{if(confirm("Delete these entries from this device without uploading them?")){lsSet(LEG,null);legMiss=[];renderPending()}}));b.appendChild(r)}
+ const list=S.items.filter(x=>x.cat===UNC).sort((a,b)=>b.dt.localeCompare(a.dt));
+ if(list.length){b.appendChild(mk("h2",null,"Waiting for a category ("+list.length+")"));
+  list.forEach(x=>b.appendChild(line(x.amount,x.type==="in",fmt(x.dt)+" · "+(x.reason||"No reason"),[btn("Categorize","btn",()=>showSms(x,false)),btn("×","del",()=>{if(confirm("Delete this entry from the sheet?"))api([{t:"del",id:x.id}])},"Delete entry")])))}
+ b.hidden=!b.childNodes.length}
+function handleHash(){
+ const h=location.hash.slice(1);
+ if(h.startsWith("connect=")){const v=h.slice(8).split("|");history.replaceState(null,"",location.pathname+location.search);
+  try{const url=decodeURIComponent(v[0]),key=decodeURIComponent(v[1]||"");if(/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){connect(url,key).then(ok=>{if(ok)toast("This device is now connected to your sheet")});return true}}catch(e){}
+  toast("That setup link is incomplete.");return false}
+ const i=h.indexOf("sms=");if(i<0)return false;
+ const raw=h.slice(i+4);let text;try{text=decodeURIComponent(raw.replace(/\+/g," "))}catch(e){text=raw}
+ history.replaceState(null,"",location.pathname+location.search);
+ text=text.trim();if(!text)return false;show("add");
+ const q=parseSms(text);if(!q){toast("Couldn’t read that message. You can add it manually.");return false}
+ saveSms({id:newId(),dt:nowLocal(),amount:q.amount,cat:UNC,reason:q.reason,type:q.dir,sms:smsHash(text)});return true}
+window.addEventListener("hashchange",handleHash);
+
 function incCard(list,spent){const b=$("inc");b.innerHTML="";b.hidden=!list.length;if(!list.length)return;const t=sum(list.map(x=>x.amount));
  const a=mk("div","card kpi");a.append(mk("div","meta","Money received"),mk("b",null,"+"+money(t)),mk("span","dl na",list.length+(list.length===1?" credit":" credits")));
  const n=mk("div","card kpi");n.append(mk("div","meta","Net (received − spent)"),mk("b",null,money(t-spent)));b.append(a,n)}
-function handleHash(){
- const h=location.hash.slice(1),i=h.indexOf("sms=");if(i<0)return;reloadState();
- const raw=h.slice(i+4);let text;try{text=decodeURIComponent(raw.replace(/\+/g," "))}catch(e){text=raw}
- history.replaceState(null,"",location.pathname+location.search);
- text=text.trim();if(!text)return;
- if(S.seen.includes(text)){show("add");toast("Already captured this message.");return}
- S.seen=[text,...S.seen].slice(0,30);save();
- const p=parseSms(text);if(!p){show("add");toast("Couldn’t read that message. You can add it manually.");return}
- show("add");showSms({pid:Date.now()+Math.floor(Math.random()*1000),dt:nowLocal(),amount:p.amount,dir:p.dir,reason:p.reason},true)}
-window.addEventListener("hashchange",handleHash);
-
 /* ---- menu + themes ---- */
 const THEMES=[["sand","Sand & Beige",["#f1e8d8","#5a4430","#8f6334","#fbf6ec"]],["ocean","Ocean",["#e8f0f7","#12385c","#1d5f9e","#f8fbfe"]],["forest","Forest",["#e9f0e6","#1f4a32","#3b7a4b","#f8fbf6"]],["rose","Rose",["#f6e9ea","#6b2a3a","#b0445a","#fdf7f7"]],["lavender","Lavender",["#ede9f6","#3d2f6b","#6a4fb3","#f9f7fd"]],["graphite","Graphite",["#eceff1","#263238","#37474f","#fafbfb"]],["midnight","Midnight (dark)",["#0f1722","#1e3a5f","#5b9bff","#172232"]]];
 function closeMenu(){$("menu").hidden=true;$("menuBtn").setAttribute("aria-expanded","false")}
@@ -648,10 +714,10 @@ $("menuBtn").onclick=()=>{const o=$("menu").hidden;$("menu").hidden=!o;$("menuBt
 document.addEventListener("click",e=>{if(!$("mw").contains(e.target))closeMenu()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeMenu()});
 $("export").addEventListener("click",closeMenu);
-function renderThemes(){const g=$("themes");g.innerHTML="";const cur=S.tn||"sand";
+function renderThemes(){const g=$("themes");g.innerHTML="";const cur=lsGet(THM)||"sand";
  THEMES.forEach(([id,name,c])=>{const b=mk("button","th"+(id===cur?" on":"")),sw=mk("div","sw");b.type="button";b.setAttribute("aria-pressed",id===cur);
   c.forEach(x=>{const i=mk("i");i.style.background=x;sw.appendChild(i)});b.append(sw,mk("span",null,name));
-  b.onclick=()=>{S.tn=id;document.documentElement.dataset.theme=id;save();renderThemes()};g.appendChild(b)})}
+  b.onclick=()=>{lsSet(THM,id);document.documentElement.dataset.theme=id;renderThemes()};g.appendChild(b)})}
 $("miTheme").onclick=()=>{closeMenu();renderThemes();$("tdlg").showModal()};
 $("tdone").onclick=()=>$("tdlg").close();
 
@@ -659,28 +725,24 @@ $("tdone").onclick=()=>$("tdlg").close();
 function updBudgetBtn(){$("budgetBtn").textContent=S.budget>0?"Budget: "+money(+S.budget):"Set budget"}
 function openBudget(){$("bud").value=S.budget||"";$("sym").value=S.cur||"";$("dlg").showModal()}
 $("budgetBtn").onclick=openBudget;$("bcancel").onclick=()=>$("dlg").close();
-$("bf").onsubmit=()=>{S.budget=Math.max(parseFloat($("bud").value)||0,0);S.cur=$("sym").value.trim();save();queueSettings();updBudgetBtn();renderStrip();renderRecent();if(!$("v-dash").hidden)renderDash()};
+$("bf").onsubmit=()=>{setSettings({budget:Math.max(parseFloat($("bud").value)||0,0),cur:$("sym").value.trim()})};
 function show(v){const a=v==="add";$("v-add").hidden=!a;$("v-dash").hidden=a;$("t-add").setAttribute("aria-selected",a);$("t-dash").setAttribute("aria-selected",!a);if(a){if(!dirty)resetDt();renderStrip()}else{renderDash()}}
 $("t-add").onclick=()=>show("add");$("t-dash").onclick=()=>show("dash");
 $("export").onclick=()=>{const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
  const rows=[["date_time","amount","category","reason","type"]].concat([...S.items].sort((a,b)=>a.dt.localeCompare(b.dt)).map(x=>[x.dt.replace("T"," "),x.amount,x.cat,x.reason,x.type==="in"?"credit":"debit"]));
  const a=mk("a");a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(q).join(",")).join("\n")],{type:"text/csv"}));a.download="expenses.csv";a.click()};
 
-renderCats();initTime();resetDt();renderRecent();renderPending();updBudgetBtn();updPending();
-if(syncOn()){if(!S.sync.pulled)refresh(true);else if(S.q.length)flush().then(afterFlush)}
-window.addEventListener("online",()=>{if(syncOn()&&S.q.length)flush().then(afterFlush)});
-handleHash();
-
-/* ---- keep several open tabs in step (MacroDroid opens a new tab per SMS) ---- */
-addEventListener("storage",e=>{if(e.key===KEY&&reloadState())renderAll()});
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&reloadState())renderAll()});
+DEF.forEach(addCat);initTime();resetDt();renderAll();
+if(!handleHash()){if(C.url)load(false);else{net("Not connected to a sheet. Open ⋮ › Google Sheet sync.");openSync()}}
+/* coming back to the page re-reads the sheet, so edits made directly in the sheet show up */
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&C.url&&!sm&&!busy)load(false,true)});
 
 /* ---- auto-close after 15 min without activity ---- */
 (()=>{const IDLE=15*60*1000;let last=Date.now();
  const poke=()=>{last=Date.now()};
  ["pointerdown","keydown","touchstart","scroll"].forEach(e=>addEventListener(e,poke,{passive:true}));
  addEventListener("hashchange",poke);
- const check=()=>{if(Date.now()-last<IDLE)return;if(sm)dismissSms();window.close()};
+ const check=()=>{if(Date.now()-last<IDLE||busy||smFail||legMiss.length)return;if(sm)dismissSms();window.close()};
  setInterval(check,30000);
  document.addEventListener("visibilitychange",()=>{if(!document.hidden)check()})})();
 </script>
