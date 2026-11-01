@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ledger – Expense tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#8f6334">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{color-scheme:light;--bg:#f1e8d8;--card:#fbf6ec;--ink:#3a2e22;--mute:#85755f;--line:#e0d2b9;--pri:#8f6334;--on-pri:#fff;--ok:#5f7f45;--warn:#b8741a;--bad:#b0443a;--nav:#dcc7a4;--navink:#3a2e22;--navtab:#6e5c44;--navline:rgba(58,46,34,.3);--tabbg:rgba(58,46,34,.09);--soft:#f0e5d1;--hero:#5a4430;--heroink:#f6ecd9;--herosub:#d6c3a3;--prev:#b9a98f;--acc2:#7b8a5a}
 html[data-theme=ocean]{--bg:#e8f0f7;--card:#f8fbfe;--ink:#12283d;--mute:#5b7389;--line:#d0dce8;--pri:#1d5f9e;--nav:#bcd3e8;--navink:#12283d;--navtab:#47627c;--navline:rgba(18,40,61,.3);--tabbg:rgba(18,40,61,.09);--soft:#e2ecf5;--hero:#12385c;--heroink:#eaf3fb;--herosub:#a9c4df;--prev:#9fb3c6;--acc2:#4a8f8c}
@@ -745,6 +749,7 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden&&C.url&&!s
  const check=()=>{if(Date.now()-last<IDLE||busy||smFail||legMiss.length)return;if(sm)dismissSms();window.close()};
  setInterval(check,30000);
  document.addEventListener("visibilitychange",()=>{if(!document.hidden)check()})})();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
 </html>
