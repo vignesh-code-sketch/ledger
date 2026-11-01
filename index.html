@@ -187,6 +187,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
   <form id="form" class="card">
     <div class="wide"><div class="seg" role="tablist" aria-label="Entry type" style="display:inline-flex"><button type="button" id="f-out" aria-selected="true">Money out</button><button type="button" id="f-in" aria-selected="false">Money in</button></div></div>
     <div class="wide"><label for="amount">Amount</label><input id="amount" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" required></div>
+    <div class="wide" id="splitw"><label for="people">Split between (people, optional)</label><input id="people" type="number" inputmode="numeric" min="1" max="50" step="1" placeholder="1 = not split"><div class="meta" id="shareTxt" style="margin-top:4px"></div></div>
     <div><label for="d">Date</label><input id="d" type="date" required></div>
     <div><label for="timeBtn">Time (24-hour)</label><div class="dd" id="tdd"><button type="button" class="dd-btn" id="timeBtn" aria-haspopup="listbox" aria-expanded="false"></button><div class="dd-panel tpanel" id="timeList" hidden><div class="tcols"><div class="tcol" id="hcol" aria-label="Hour"></div><div class="tcol" id="mcol" aria-label="Minute"></div></div></div></div></div>
     <div class="wide"><label id="catlbl">Category</label><div class="dd" id="dd"><button type="button" class="dd-btn" id="catBtn" aria-haspopup="listbox" aria-expanded="false"></button><div class="dd-panel" id="catList" role="listbox" hidden></div></div></div>
@@ -205,9 +206,11 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
   <div class="fbar"><div class="dd" id="tfdd"><button type="button" class="dd-btn" id="tagfBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Filter by tag"></button><div class="dd-panel" id="tagfList" role="listbox" hidden></div></div><div class="seg" role="tablist" aria-label="Money direction"><button id="d-out" type="button" aria-selected="true">Out</button><button id="d-in" type="button" aria-selected="false">In</button></div><button class="ghost" id="fclr" type="button" hidden>Clear</button></div>
   <div class="rng" id="rng" hidden><div><label for="rf">From</label><input id="rf" type="date"></div><div><label for="rt">To</label><input id="rt" type="date"></div><div class="presets"><button class="ghost" data-d="7" type="button">7 days</button><button class="ghost" data-d="30" type="button">30 days</button><button class="ghost" data-d="90" type="button">90 days</button><button class="ghost" data-d="ytd" type="button">This year</button></div></div>
   <div class="mnav" id="mnav"><button class="ghost" id="prev" aria-label="Previous month">‹</button><b id="mlabel"></b><button class="ghost" id="next" aria-label="Next month">›</button></div>
+  <div class="card" id="bal" style="margin-bottom:12px"></div>
   <div class="hero" id="hero"></div>
   <div class="g g4" id="kpis"></div>
   <div class="g" id="inc" hidden></div>
+  <div class="g" id="owe" hidden></div>
   <div class="card g" style="display:block"><h2>Cumulative spending: this month vs last month</h2><div id="cum"></div><div class="legend" id="cleg"></div></div>
   <div class="g g2">
     <div class="card"><h2>Category comparison</h2><div id="cats"></div></div>
@@ -245,6 +248,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
   <div class="meta" id="smsk"></div>
   <div class="smsamt" id="smsamt"></div>
   <div class="meta" id="smsmeta"></div>
+  <div id="smssplit" style="margin-top:10px"><label class="meta" for="smsppl">Split between (people, optional)</label><input id="smsppl" type="number" inputmode="numeric" min="1" max="50" placeholder="1 = not split" style="margin-top:4px"><div class="meta" id="smsshare" style="margin-top:4px"></div></div>
     <div class="meta" style="margin:16px 0 6px">Category</div>
   <div class="dd" id="smscdd"><button type="button" class="dd-btn" id="smscBtn" aria-haspopup="listbox" aria-expanded="false"></button><div class="dd-panel" id="smscList" role="listbox" hidden></div></div>
   <div class="newcat" id="smsnew" style="margin-top:10px"><input id="smsnn" maxlength="20" placeholder="New category name" aria-label="New category name"></div>
@@ -263,11 +267,14 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
   <strong>Budget settings</strong>
   <label for="bud">Monthly budget</label><input id="bud" type="number" step="0.01" min="0" placeholder="e.g. 3000">
   <label for="sym">Currency symbol (optional)</label><input id="sym" maxlength="3" placeholder="e.g. $, €, ₹">
+  <label for="open">Account balance now (optional)</label><input id="open" type="number" step="0.01" placeholder="What is in the account today">
+  <label for="opend">Count transactions from (optional)</label><input id="opend" type="date">
+  <p class="meta" style="margin:6px 0 0">Money in and out after this point is added to or taken from your balance. Leave the date empty to start from now.</p>
   <div class="acts"><button type="button" class="ghost" id="bcancel">Cancel</button><button class="btn" type="submit">Save</button></div>
 </form></dialog>
 
 <script>
-const APPVER="v14",BOOT=location.href;
+const APPVER="v15",BOOT=location.href;
 const LEG="expense-tracker-v2",LEG1="expense-tracker-v1",CONN="ledger-conn",THM="ledger-theme",UNC="Uncategorized";
 const PAL=["#8f6334","#6b8f5e","#c9822b","#b0443a","#8a6a8f","#4f8a8b","#c26a7a","#8a9a3b","#6b5b4b","#d19a5c"];
 const DEF=["Food","Transport","Bills","Shopping","Health","Fun","Other"];
@@ -309,7 +316,7 @@ const cur=ymOf(new Date());
 const shift=(ym,k)=>{const[y,m]=ym.split("-").map(Number);return ymOf(new Date(y,m-1+k,1))};
 const dim=ym=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate()};
 const elapsed=ym=>ym===cur?new Date().getDate():ym<cur?dim(ym):0;
-function mstat(ym){const its=vis().filter(x=>isDir(x)&&x.dt.startsWith(ym)),n=dim(ym),days=Array(n).fill(0),cat={};
+function mstat(ym){const its=vis().filter(x=>isDir(x)&&x.dt.startsWith(ym)).map(sh),n=dim(ym),days=Array(n).fill(0),cat={};
  its.forEach(x=>{days[+x.dt.slice(8,10)-1]+=x.amount;cat[x.cat]=(cat[x.cat]||0)+x.amount});return{its,n,days,cat,t:sum(days)}}
 function calc(ym){const m=mstat(ym),pm=mstat(shift(ym,-1)),n=m.n,e=elapsed(ym),B=dir==="in"?0:+S.budget||0,run=e?m.t/e:0,isCur=ym===cur,dl=isCur?n-e+1:0,left=B-m.t;
  return{m,pm,n,e,B,left,run,isCur,dl,proj:isCur?run*n:m.t,safe:dl&&B?Math.max(left,0)/dl:0}}
@@ -344,7 +351,9 @@ function tagPicker(box,sel,touch){box.innerHTML="";const wrap=mk("div","chips"),
 let curCat="Food",fIn=false,inExtra=[],catOut="Food",catIn="Salary";
 /* the form records money out (expense) or money in (credit) */
 const fLabel=()=>fIn?"Add credit":"Add expense";
-function setFDir(v){if(v===fIn)return;if(fIn)catIn=curCat;else catOut=curCat;fIn=v;curCat=fIn?catIn:catOut;
+function shareHint(){const a=parseFloat($("amount").value),n=parseInt($("people").value)||1;$("shareTxt").textContent=n>1&&a>0?"Your share: "+money(a/n)+" ("+money(a)+" ÷ "+n+"). The rest is tracked as owed to you.":""}
+$("amount").addEventListener("input",shareHint);$("people").addEventListener("input",shareHint);
+function setFDir(v){$("splitw").hidden=v;if(v===fIn)return;if(fIn)catIn=curCat;else catOut=curCat;fIn=v;curCat=fIn?catIn:catOut;
  $("f-out").setAttribute("aria-selected",!fIn);$("f-in").setAttribute("aria-selected",fIn);$("fsub").textContent=fLabel();
  $("reason").placeholder=fIn?"From whom, or what it was for":"Payee, or what it was for";$("newcat").classList.remove("on");$("err").textContent="";renderCats()}
 $("f-out").onclick=()=>setFDir(false);$("f-in").onclick=()=>setFDir(true);
@@ -409,15 +418,17 @@ $("form").onsubmit=async e=>{e.preventDefault();const amount=parseFloat($("amoun
  if(!$("d").value){$("err").textContent="Pick a date.";return}
  if(!C.url){openSync();return}
  $("err").textContent="";const sb=$("form").querySelector("[type=submit]");sb.disabled=true;sb.textContent="Saving to sheet…";
- const it={id:newId(),dt:$("d").value+"T"+tH+":"+tM,amount,cat,reason:$("reason").value.trim(),type:fIn?"in":"out"};
+ const it={id:newId(),dt:$("d").value+"T"+tH+":"+tM,amount,cat,reason:$("reason").value.trim(),type:fIn?"in":"out"};if(!fIn){const pp=Math.min(50,parseInt($("people").value)||1);if(pp>1)it.people=pp}
  if(formTags.size&&!taggable(it.reason)){sb.disabled=false;sb.textContent=fLabel();$("err").textContent="Type the payee in Reason so the tags have someone to belong to.";return}
  const ok=await api([{t:"add",item:it},...tagOpsFor(it.reason,[...formTags])]);sb.disabled=false;sb.textContent=fLabel();
  if(!ok){$("err").textContent="Not saved: couldn’t reach the sheet. Your entry is still in the form, so try again.";return}
+ $("people").value="";setTimeout(shareHint,0);
  $("amount").value="";$("reason").value="";formTags=new Set();tagTouched=false;renderTagDd();resetDt();$("amount").focus();toast((fIn?"Credit":"Expense")+" saved to the sheet")};
 function rowFor(x,del=true){const r=mk("div","row"),t=mk("div"),d=mk("span","dot");d.style.background=x.type==="in"?"var(--ok)":color(x.cat);
- t.append(mk("div","note",x.reason||x.cat),mk("div","meta",(x.reason?x.cat+" · ":"")+fmt(x.dt)));const am=mk("span","amt",(x.type==="in"?"+":"")+money(x.amount));if(x.type==="in")am.style.color="var(--ok)";const pt=partyOf(x);if(taggable(pt)){const tg=tagsOf(x),tb=mk("button","tagb");tb.type="button";tb.title="Tags for "+pt;
+ t.append(mk("div","note",x.reason||x.cat),mk("div","meta",(x.reason?x.cat+" · ":"")+fmt(x.dt)+(x.people>1&&x.type!=="in"?" · paid "+money(x.paid||x.amount)+" ÷"+x.people:"")));const am=mk("span","amt",(x.type==="in"?"+":"")+money(x.people>1&&x.type!=="in"?(x.paid||x.amount)/x.people:x.amount));if(x.type==="in")am.style.color="var(--ok)";const pt=partyOf(x);if(taggable(pt)){const tg=tagsOf(x),tb=mk("button","tagb");tb.type="button";tb.title="Tags for "+pt;
   if(tg.length)tg.forEach(v=>{const q=mk("span","tp",v);q.style.color=q.style.borderColor=tcolor(v);tb.appendChild(q)});else tb.textContent="+ tag";
   tb.onclick=()=>openTagDlg(pt);t.appendChild(tb)}
+ if(x.type!=="in"){const sb=mk("button","tagb",x.people>1?"÷"+x.people+" people":"÷ split");sb.type="button";sb.title="Split with friends";sb.onclick=()=>{const v=prompt("Split between how many people? (1 = not split)",x.people>1?x.people:2),n=parseInt(v);if(n>=1&&n<=50)api([{t:"upd",id:x.id,fields:{people:n}}])};t.appendChild(sb)}
  r.append(d,t,am);
  if(del){const b=mk("button","del","×");b.type="button";b.setAttribute("aria-label","Delete expense");b.onclick=()=>{if(confirm("Delete this entry from the sheet?"))api([{t:"del",id:x.id}])};r.appendChild(b)}else r.style.gridTemplateColumns="auto 1fr auto";return r}
 let tgPt="",tgSel=new Set();
@@ -431,7 +442,12 @@ function renderStrip(){}
 /* ---- dashboard ---- */
 let sel=cur,fTag="",fParty="",dir="out";
 const DW=(o,i)=>dir==="in"?i:o;
-const isDir=x=>dir==="in"?x.type==="in":x.type!=="in";
+const REIMB="Reimbursement",sh=x=>x.type==="in"||!(x.people>1)?x:Object.assign({},x,{paid:x.amount,amount:x.amount/x.people});
+const isDir=x=>dir==="in"?x.type==="in"&&x.cat!==REIMB:x.type!=="in";
+const oth=x=>dir==="in"?x.type!=="in":x.type==="in"&&x.cat!==REIMB;
+function renderOwe(){const b=$("owe");b.innerHTML="";const sp=S.items.filter(x=>x.type!=="in"&&x.people>1),rc=S.items.filter(x=>x.type==="in"&&x.cat===REIMB);
+ b.hidden=dir==="in"||(!sp.length&&!rc.length);if(b.hidden)return;const due=sum(sp.map(x=>x.amount-x.amount/x.people)),got=sum(rc.map(x=>x.amount)),left=due-got;
+ const a=mk("div","card kpi");a.append(mk("div","meta",left>=0?"Friends owe you":"Received extra"),mk("b",null,money(Math.abs(left))),mk("span","dl na",money(got)+" received back of "+money(due)+" owed"));b.appendChild(a)}
 const passF=x=>(!fTag||tagsOf(x).includes(fTag))&&(!fParty||partyOf(x).toLowerCase().includes(fParty));
 const vis=()=>fTag||fParty?S.items.filter(passF):S.items;
 function renderFilter(){const tags=allTags();if(fTag&&!tags.includes(fTag))fTag="";const b=$("tagfBtn"),l=$("tagfList"),dot=v=>{const d=mk("span","dot");d.style.background=v?tcolor(v):"var(--line)";return d};
@@ -468,7 +484,7 @@ function renderDash(){
  hero+="</div><div class='tiles'>"+tile(t1)+tile(t2)+tile(t3)+"</div>";
  if(c.isCur&&c.B&&c.proj>c.B&&m.t<=c.B&&c.run>0){const hit=Math.ceil(c.B/c.run);if(hit<=n)hero+='<div class="warnnote">At this pace your budget runs out on '+new Date(y,mo-1,hit).toLocaleDateString(undefined,{day:"numeric",month:"short"})+".</div>"}
  $("hero").innerHTML=hero;
- incCard(vis().filter(x=>!isDir(x)&&x.dt.startsWith(sel)),m.t);
+ incCard(vis().filter(x=>oth(x)&&x.dt.startsWith(sel)).map(sh),m.t);renderOwe();
 
  const big=m.its.reduce((a,x)=>x.amount>(a?a.amount:0)?x:a,null),k=$("kpis");k.innerHTML="";
  [[DW("Spent ","Received ")+(c.isCur?"so far":"this month"),money(m.t),delta(m.t,prevSame)],["Daily average",money(m.t/Math.max(cmpDays,1)),delta(m.t/Math.max(cmpDays,1),pm.t/pm.n)],["Transactions",String(m.its.length),delta(m.its.length,pm.its.length)],[DW("Largest expense","Largest credit"),big?money(big.amount):"–",null]]
@@ -524,7 +540,7 @@ const addDays=(s,k)=>{const d=new Date(s+"T00:00");d.setDate(d.getDate()+k);retu
 const dayDiff=(a,b)=>Math.round((new Date(b+"T00:00")-new Date(a+"T00:00"))/864e5);
 const fdate=s=>new Date(s+"T00:00").toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
 const fshort=s=>new Date(s+"T00:00").toLocaleDateString(undefined,{day:"numeric",month:"short"});
-function rstat(from,to){const n=dayDiff(from,to)+1,days=Array(n).fill(0),cat={},its=vis().filter(x=>{const d=x.dt.slice(0,10);return isDir(x)&&d>=from&&d<=to});
+function rstat(from,to){const n=dayDiff(from,to)+1,days=Array(n).fill(0),cat={},its=vis().filter(x=>{const d=x.dt.slice(0,10);return isDir(x)&&d>=from&&d<=to}).map(sh);
  its.forEach(x=>{days[dayDiff(from,x.dt.slice(0,10))]+=x.amount;cat[x.cat]=(cat[x.cat]||0)+x.amount});return{its,n,days,cat,t:sum(days)}}
 function cumChart(cc,pc,n,from){const W=640,H=210,ym=Math.max(...cc,...pc,1)*1.08,sx=d=>34+(d-1)/Math.max(n-1,1)*(W-44),sy=v=>H-22-v/ym*(H-34);
  const ln=a=>a.map((v,i)=>(i?"L":"M")+sx(i+1).toFixed(1)+" "+sy(v).toFixed(1)).join("");
@@ -581,7 +597,7 @@ function renderRange(){
  const ch=pm.t>0?(m.t-pm.t)/pm.t*100:null,dn=n+(n===1?" day":" days");
  const tile=a=>'<div class="tile"><span>'+a[0]+"</span><b>"+a[1]+"</b><small>"+a[2]+"</small></div>";
  $("hero").innerHTML='<div><div class="lbl">'+DW("Spent in this period","Received in this period")+'</div><div class="bigv">'+money(m.t)+'</div><div class="lbl">'+fdate(rf)+" – "+fdate(rt)+" · "+dn+"</div>"+(ch==null?"":'<span class="chip '+((ch>0)!==(dir==="in")?"bad":"ok")+'" style="margin-top:12px">'+(ch>0?"▲ ":"▼ ")+Math.abs(ch).toFixed(0)+"% vs previous "+dn+"</span>")+"</div><div class='tiles'>"+tile(["Daily average",money(m.t/eff),"Across "+eff+(eff===1?" day":" days")])+tile(["Transactions",String(m.its.length),pm.its.length+" in previous period"])+tile(["Previous period",money(pm.t),fshort(pf)+" – "+fshort(pt)])+'</div><div class="warnnote">Balance left and month-end projection are shown in the Month view.</div>';
- const big=m.its.reduce((a,x)=>x.amount>(a?a.amount:0)?x:a,null),k=$("kpis");k.innerHTML="";incCard(vis().filter(x=>!isDir(x)&&x.dt.slice(0,10)>=rf&&x.dt.slice(0,10)<=rt),m.t);const L2="previous period";
+ const big=m.its.reduce((a,x)=>x.amount>(a?a.amount:0)?x:a,null),k=$("kpis");k.innerHTML="";incCard(vis().filter(x=>oth(x)&&x.dt.slice(0,10)>=rf&&x.dt.slice(0,10)<=rt).map(sh),m.t);renderOwe();const L2="previous period";
  [[DW("Spent","Received"),money(m.t),delta(m.t,pm.t,L2)],["Daily average",money(m.t/eff),delta(m.t/eff,pm.t/n,L2)],["Transactions",String(m.its.length),delta(m.its.length,pm.its.length,L2)],[DW("Largest expense","Largest credit"),big?money(big.amount):"–",null]]
  .forEach(([l,v,d])=>{const x=mk("div","card kpi");x.append(mk("div","meta",l),mk("b",null,v));x.appendChild(d||mk("span","dl na",big?(big.reason||big.cat):"none yet"));k.appendChild(x)});
  const cum=a=>{let s=0;return a.map(v=>s+=v)};
@@ -622,7 +638,7 @@ document.querySelectorAll("#rng [data-d]").forEach(b=>b.onclick=()=>{const k=b.d
 /* ---- Google Sheet: every read and write goes straight to the sheet ---- */
 const SCRIPT=`// Ledger sync - paste into Extensions > Apps Script, then Deploy > Web app
 var SECRET = '__SECRET__';
-var EX = ['id', 'date_time', 'amount', 'category', 'reason', 'type', 'sms_id'];
+var EX = ['id', 'date_time', 'amount', 'category', 'reason', 'type', 'sms_id', 'people'];
 function ss_() { return SpreadsheetApp.getActive(); }
 function sheet_(name, head) {
   var s = ss_().getSheetByName(name);
@@ -658,7 +674,7 @@ function data_() {
     if (r[1] === '' && r[2] === '') return;
     if (r[0] === '') { r[0] = newId_(); s.getRange(i + 2, 1).setValue(r[0]); }
     var dt = r[1] instanceof Date ? Utilities.formatDate(r[1], tz, "yyyy-MM-dd'T'HH:mm") : String(r[1]);
-    items.push({id: String(r[0]), dt: dt, amount: Number(r[2]), cat: String(r[3]), reason: String(r[4]), type: String(r[5] || '')});
+    items.push({id: String(r[0]), dt: dt, amount: Number(r[2]), cat: String(r[3]), reason: String(r[4]), type: String(r[5] || ''), people: Number(r[7]) || 1});
   });
   return {items: items, settings: settings_()};
 }
@@ -680,12 +696,12 @@ function doPost(e) {
         var it = op.item;
         if (find(it.id) > 0) return;
         if (it.sms) for (var j = 0; j < rows.length; j++) if (String(rows[j][6]) === String(it.sms)) { dups[it.sms] = String(rows[j][0]); return; }
-        s.appendRow([it.id, it.dt, it.amount, it.cat, it.reason, it.type || '', it.sms || '']);
+        s.appendRow([it.id, it.dt, it.amount, it.cat, it.reason, it.type || '', it.sms || '', it.people > 1 ? it.people : '']);
       } else if (op.t === 'del') {
         var r = find(op.id);
         if (r > 0) s.deleteRow(r);
       } else if (op.t === 'upd') {
-        var r2 = find(op.id), col = {dt: 2, amount: 3, cat: 4, reason: 5, type: 6};
+        var r2 = find(op.id), col = {dt: 2, amount: 3, cat: 4, reason: 5, type: 6, people: 8};
         if (r2 > 0) Object.keys(op.fields || {}).forEach(function (k) { if (col[k]) s.getRange(r2, col[k]).setValue(op.fields[k]); });
       } else if (op.t === 'set') {
         var st = sheet_('Settings', ['key', 'value']), cur = settings_();
@@ -719,12 +735,12 @@ async function call(body){
 function fail(e,retry,quiet){if(e&&e.message==="noconn")return;const m=errMsg(e);net(m,retry);if(!quiet)toast(m)}
 function apply(j){
  const items=[];(j.items||[]).forEach(x=>{let dt=String(x.dt||"").trim().replace(" ","T");if(/^\d{4}-\d{2}-\d{2}$/.test(dt))dt+="T00:00";dt=dt.slice(0,16);const a=Number(x.amount);
-  if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dt)&&a>0)items.push({id:String(x.id),dt,amount:a,cat:String(x.cat||"").trim()||UNC,reason:String(x.reason||""),type:/^(in|credit)$/i.test(String(x.type).trim())?"in":"out"})});
+  if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dt)&&a>0)items.push({id:String(x.id),dt,amount:a,cat:String(x.cat||"").trim()||UNC,reason:String(x.reason||""),type:/^(in|credit)$/i.test(String(x.type).trim())?"in":"out",people:Math.max(1,Math.min(50,parseInt(x.people)||1))})});
  S.items=items;const st=j.settings||{};
  let c={};try{c=JSON.parse(st.cats||"{}")}catch(e){}S.cats=c&&typeof c==="object"?c:{};delete S.cats[UNC];if(!Object.keys(S.cats).length)DEF.forEach(addCat);
  let t={};try{t=JSON.parse(st.tags||"{}")}catch(e){}S.tags=t&&typeof t==="object"?t:{};
  let tc={};try{tc=JSON.parse(st.tagcolors||"{}")}catch(e){}S.tagc=tc&&typeof tc==="object"?tc:{};
- S.budget=+st.budget||0;S.cur=st.cur||"";loaded=true;
+ S.budget=+st.budget||0;S.cur=st.cur||"";S.opening=st.opening===undefined||st.opening===""?"":+st.opening;S.openingdate=String(st.openingdate||"");loaded=true;
  const L=legacy();if(L){const have=new Set(items.map(x=>x.id));legMiss=L.its.filter(x=>x.amount>0&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(x.dt||"")&&!have.has(x.id));if(!legMiss.length)lsSet(LEG,null)}
  renderAll()}
 /* write: send the change, then redraw from what the sheet returns */
@@ -735,7 +751,11 @@ async function api(ops){try{const j=await call({ops});net("");
 /* read only */
 async function load(manual,quiet){try{const j=await call(null);net("");apply(j);if(manual)toast("Up to date with the sheet");return true}catch(e){fail(e,()=>load(true),quiet);return false}}
 const setSettings=o=>api([{t:"set",settings:o}]);
-function renderAll(){renderCats();renderTagDd();renderRecent();renderPending();updBudgetBtn();if(!$("v-dash").hidden)renderDash()}
+function renderBal(){const b=$("bal");b.innerHTML="";
+ if(S.opening===""||S.opening==null||isNaN(S.opening)){b.appendChild(mk("div","meta","Set your account balance to see what is left after your money in and out."));const x=mk("button","ghost","Set balance");x.type="button";x.style.marginTop="8px";x.onclick=openBudget;b.appendChild(x);return}
+ const from=S.openingdate||"",o=+S.opening;let i=0,u=0;S.items.forEach(x=>{if(x.dt<from)return;if(x.type==="in")i+=x.amount;else u+=x.amount});const bal=o+i-u,t=mk("div","bigv",money(bal));if(bal<0)t.style.color="var(--bad)";
+ b.append(mk("div","meta","Budget left in account"),t,mk("div","meta","Opening "+money(o)+" · in +"+money(i)+" · out −"+money(u)+" · since "+(from?fdate(from.slice(0,10)):"the start")))}
+function renderAll(){renderCats();renderTagDd();renderRecent();renderPending();updBudgetBtn();renderBal();if(!$("v-dash").hidden)renderDash()}
 function scriptText(){return SCRIPT.replace("__SECRET__",($("skey").value||"your-secret").replace(/[^A-Za-z0-9_-]/g,""))}
 function rand(){const a=new Uint8Array(12);crypto.getRandomValues(a);return Array.from(a,x=>"abcdefghjkmnpqrstuvwxyz23456789"[x%31]).join("")}
 const setupLink=()=>location.origin+location.pathname+"#connect="+encodeURIComponent(C.url)+"|"+encodeURIComponent(C.key);
@@ -755,7 +775,7 @@ $("scancel").onclick=()=>$("sdlg").close();
 $("miSync").onclick=openSync;$("refreshBtn").onclick=()=>load(true);
 
 /* ---- bank SMS capture ---- */
-const IN_CATS=["Salary","Refund","Transfer","Interest","Other income"];
+const IN_CATS=["Reimbursement","Salary","Refund","Transfer","Interest","Other income"];
 const inCats=()=>[...new Set([...IN_CATS,...S.items.filter(x=>x.type==="in"&&x.cat!==UNC).map(x=>x.cat)])];
 /* clean whatever arrives: percent-encoding, "+" for spaces, hidden characters, look-alike letters */
 function cleanSms(t){t=String(t||"");
@@ -801,8 +821,10 @@ $("smscBtn").onclick=()=>{stopCd();const o=$("smscList").hidden;smsClose();$("sm
 $("smstBtn").onclick=()=>{stopCd();const o=$("smstList").hidden;smsClose();$("smstList").hidden=!o;$("smstBtn").setAttribute("aria-expanded",o)};
 function smsAddTag(){const t=normTag($("smsntn").value);if(!t)return;sm.tags.add(t);$("smsntn").value="";$("smsnt").classList.remove("on");renderSmsTags()}
 $("smsntb").onclick=smsAddTag;$("smsntn").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();smsAddTag()}};$("smsntn").oninput=stopCd;
+function smsShare(){const n=parseInt($("smsppl").value)||1,a=sm?sm.it.amount:0;$("smsshare").textContent=n>1?"Your share: "+money(a/n)+" ("+money(a)+" ÷ "+n+")":""}
+$("smsppl").oninput=()=>{stopCd();smsShare()};
 function showSms(it,auto){
- sm={it,cat:""};$("smsov").hidden=false;const inn=it.type==="in";
+ sm={it,cat:""};$("smsov").hidden=false;const inn=it.type==="in";$("smssplit").hidden=inn;$("smsppl").value=it.people>1?it.people:"";smsShare();
  $("smsk").textContent=inn?"HDFC · money received":"HDFC · money spent";
  $("smsamt").textContent=(inn?"+":"−")+money(it.amount);$("smsamt").style.color=inn?"var(--ok)":"var(--ink)";
  $("smsmeta").textContent=new Date(it.dt).toLocaleString(undefined,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hour12:false})+" · "+it.reason;
@@ -812,14 +834,14 @@ function showSms(it,auto){
   $("smscd").hidden=false;tick();smT=setInterval(tick,100)}}
 function tagOps(it){return tagOpsFor(partyOf(it),[...sm.tags])}
 /* the row is already in the sheet as Uncategorized; closing just leaves it there */
-async function dismissSms(){if(!sm)return;const ops=tagOps(sm.it),L=sm.launch;closeSms();if(ops.length)await api(ops);toast("Kept in the sheet as uncategorized.");if(L)closeApp()}
+async function dismissSms(){if(!sm)return;const ops=tagOps(sm.it),L=sm.launch,pq=parseInt($("smsppl").value)||1;if(sm.it.type!=="in"&&pq>1)ops.push({t:"upd",id:sm.it.id,fields:{people:Math.min(50,pq)}});closeSms();if(ops.length)await api(ops);toast("Kept in the sheet as uncategorized.");if(L)closeApp()}
 $("smsx").onclick=dismissSms;
 $("smsnn").oninput=()=>{stopCd();$("smsok").disabled=!$("smsnn").value.trim();renderSmsDd()};
 $("smsok").onclick=async()=>{if(!sm)return;const it=sm.it;let cat=sm.cat;
  if($("smsnew").classList.contains("on")){cat=$("smsnn").value.trim();if(!cat)return}
  const ops=[];
  if(it.type!=="in"){const f=Object.keys(S.cats).find(c=>c.toLowerCase()===cat.toLowerCase());cat=f||cat;if(!S.cats[cat])ops.push({t:"set",settings:{cats:JSON.stringify(withCat(cat))}})}
- ops.unshift({t:"upd",id:it.id,fields:{cat}});ops.push(...tagOps(it));
+ ops.unshift({t:"upd",id:it.id,fields:it.type==="in"?{cat}:{cat,people:Math.max(1,Math.min(50,parseInt($("smsppl").value)||1))}});ops.push(...tagOps(it));
  stopCd();$("smsok").disabled=true;$("smsok").textContent="Saving…";
  const j=await api(ops);$("smsok").textContent="OK";
  if(!j){$("smsok").disabled=false;return}
@@ -894,13 +916,15 @@ $("tdone").onclick=()=>$("tdlg").close();
 
 /* ---- budget dialog, tabs, export ---- */
 function updBudgetBtn(){$("budgetBtn").textContent=S.budget>0?"Budget: "+money(+S.budget):"Set budget"}
-function openBudget(){$("bud").value=S.budget||"";$("sym").value=S.cur||"";$("dlg").showModal()}
+function openBudget(){$("bud").value=S.budget||"";$("sym").value=S.cur||"";$("open").value=S.opening===""||S.opening==null?"":S.opening;$("opend").value=(S.openingdate||"").slice(0,10);$("dlg").showModal()}
 $("budgetBtn").onclick=openBudget;$("bcancel").onclick=()=>$("dlg").close();
-$("bf").onsubmit=()=>{setSettings({budget:Math.max(parseFloat($("bud").value)||0,0),cur:$("sym").value.trim()})};
+$("bf").onsubmit=()=>{const ov=$("open").value.trim(),od=$("opend").value,o={budget:Math.max(parseFloat($("bud").value)||0,0),cur:$("sym").value.trim(),opening:ov};
+ if(ov===""){o.openingdate=""}else{let when=S.openingdate||"";const chg=String(S.opening)!==String(+ov);if(od&&(chg||od!==when.slice(0,10)))when=od;else if(!od&&(chg||!when))when=nowLocal();o.openingdate=when}
+ setSettings(o)};
 function show(v){const a=v==="add";$("v-add").hidden=!a;$("v-dash").hidden=a;$("t-add").setAttribute("aria-selected",a);$("t-dash").setAttribute("aria-selected",!a);if(a){if(!dirty)resetDt();renderStrip()}else{renderDash()}}
 $("t-add").onclick=()=>show("add");$("t-dash").onclick=()=>show("dash");
 $("export").onclick=()=>{const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
- const rows=[["date_time","amount","category","reason","type"]].concat([...S.items].sort((a,b)=>a.dt.localeCompare(b.dt)).map(x=>[x.dt.replace("T"," "),x.amount,x.cat,x.reason,x.type==="in"?"credit":"debit"]));
+ const rows=[["date_time","amount","category","reason","type","people"]].concat([...S.items].sort((a,b)=>a.dt.localeCompare(b.dt)).map(x=>[x.dt.replace("T"," "),x.amount,x.cat,x.reason,x.type==="in"?"credit":"debit",x.people||1]));
  const a=mk("a");a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(q).join(",")).join("\n")],{type:"text/csv"}));a.download="expenses.csv";a.click()};
 
 DEF.forEach(addCat);initTime();resetDt();renderAll();
