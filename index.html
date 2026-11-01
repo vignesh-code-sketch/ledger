@@ -152,7 +152,7 @@ input[type=date]{min-height:44px}
 .tchip{display:inline-flex;align-items:center;gap:6px}.chk{width:1.1em;text-align:center;color:var(--pri);font-weight:700}
 .chip2.on .dot{box-shadow:0 0 0 2px var(--on-pri)}
 .tagsum{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.fbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}.fbar select{flex:1}.fbar .seg{flex:0 0 auto}
+.fbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}.fbar .dd{flex:1;min-width:0}.fbar .seg{flex:0 0 auto}
 .netbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px;border-color:var(--bad);color:var(--bad);font-weight:600}
 .pendrow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .pendrow:last-child{border-bottom:0}
@@ -201,7 +201,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 
 <section id="v-dash" hidden>
   <div class="toolbar"><div class="seg" role="tablist" aria-label="Period type"><button id="m-month" aria-selected="true">Month</button><button id="m-range" aria-selected="false">Custom range</button></div><button class="ghost" id="budgetBtn" type="button">Set budget</button></div>
-  <div class="fbar"><select id="tagf" aria-label="Filter by tag"></select><div class="seg" role="tablist" aria-label="Money direction"><button id="d-out" type="button" aria-selected="true">Out</button><button id="d-in" type="button" aria-selected="false">In</button></div><button class="ghost" id="fclr" type="button" hidden>Clear</button></div>
+  <div class="fbar"><div class="dd" id="tfdd"><button type="button" class="dd-btn" id="tagfBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Filter by tag"></button><div class="dd-panel" id="tagfList" role="listbox" hidden></div></div><div class="seg" role="tablist" aria-label="Money direction"><button id="d-out" type="button" aria-selected="true">Out</button><button id="d-in" type="button" aria-selected="false">In</button></div><button class="ghost" id="fclr" type="button" hidden>Clear</button></div>
   <div class="rng" id="rng" hidden><div><label for="rf">From</label><input id="rf" type="date"></div><div><label for="rt">To</label><input id="rt" type="date"></div><div class="presets"><button class="ghost" data-d="7" type="button">7 days</button><button class="ghost" data-d="30" type="button">30 days</button><button class="ghost" data-d="90" type="button">90 days</button><button class="ghost" data-d="ytd" type="button">This year</button></div></div>
   <div class="mnav" id="mnav"><button class="ghost" id="prev" aria-label="Previous month">‹</button><b id="mlabel"></b><button class="ghost" id="next" aria-label="Next month">›</button></div>
   <div class="hero" id="hero"></div>
@@ -266,7 +266,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 </form></dialog>
 
 <script>
-const APPVER="v9",BOOT=location.href;
+const APPVER="v10",BOOT=location.href;
 const LEG="expense-tracker-v2",LEG1="expense-tracker-v1",CONN="ledger-conn",THM="ledger-theme",UNC="Uncategorized";
 const PAL=["#8f6334","#6b8f5e","#c9822b","#b0443a","#8a6a8f","#4f8a8b","#c26a7a","#8a9a3b","#6b5b4b","#d19a5c"];
 const DEF=["Food","Transport","Bills","Shopping","Health","Fun","Other"];
@@ -331,7 +331,7 @@ function tagOpsFor(pt,list){list=[...new Set(list)].sort();const st={},tc=Object
 function setTags(pt,list){const ops=tagOpsFor(pt,list);return ops.length?api(ops):Promise.resolve(true)}
 /* chip picker used in the SMS popup and the tag dialog: works like the category chips, but several can be on */
 function tagPicker(box,sel,touch){box.innerHTML="";const wrap=mk("div","chips"),row=mk("div","newcat"),inp=mk("input"),add=mk("button","btn","Add tag");
- const draw=()=>{wrap.innerHTML="";[...new Set([...allTags(),...sel])].sort().forEach(n=>{const b=mk("button","chip2 tchip"+(sel.has(n)?" on":"")),d=mk("span","dot");d.style.background=tcolor(n);b.type="button";b.setAttribute("aria-pressed",sel.has(n));b.append(d,mk("span",null,"#"+n));
+ const draw=()=>{wrap.innerHTML="";[...new Set([...allTags(),...sel])].sort().forEach(n=>{const b=mk("button","chip2 tchip"+(sel.has(n)?" on":"")),d=mk("span","dot");d.style.background=tcolor(n);b.type="button";b.setAttribute("aria-pressed",sel.has(n));b.append(d,mk("span",null,n));
    b.onclick=()=>{if(touch)touch();sel.has(n)?sel.delete(n):sel.add(n);draw()};wrap.appendChild(b)});
   const o=mk("button","chip2","+ New tag");o.type="button";o.onclick=()=>{if(touch)touch();row.classList.add("on");inp.focus()};wrap.appendChild(o)};
  inp.maxLength=20;inp.placeholder="New tag name";inp.setAttribute("aria-label","New tag name");add.type="button";row.style.marginTop="10px";
@@ -367,14 +367,14 @@ $("savecat").onclick=saveCat;
 let formTags=new Set(),tagTouched=false;
 $("tagBtn").onclick=()=>toggleDd("tagList","tagBtn");
 function renderTagDd(){const b=$("tagBtn");b.innerHTML="";const sm2=mk("span","tagsum");
- if(formTags.size)[...formTags].sort().forEach(t=>{const d=mk("span","dot");d.style.background=tcolor(t);sm2.append(d,mk("span",null,"#"+t))});else sm2.appendChild(mk("span","meta","No tags"));
+ if(formTags.size)[...formTags].sort().forEach(t=>{const d=mk("span","dot");d.style.background=tcolor(t);sm2.append(d,mk("span",null,t))});else sm2.appendChild(mk("span","meta","No tags"));
  b.append(sm2,mk("span","chev","▾"));
  const l=$("tagList");l.innerHTML="";const names=[...new Set([...allTags(),...formTags])].sort();
  names.forEach(nm=>{const r=mk("div","dd-row"),i=mk("button","dd-item"),d=mk("span","dot"),on=formTags.has(nm);d.style.background=tcolor(nm);i.type="button";i.setAttribute("role","option");i.setAttribute("aria-selected",on);
-  i.append(mk("span","chk",on?"✓":""),d,mk("span",null,"#"+nm));
+  i.append(mk("span","chk",on?"✓":""),d,mk("span",null,nm));
   i.onclick=e=>{e.stopPropagation();tagTouched=true;on?formTags.delete(nm):formTags.add(nm);renderTagDd()};
   const m=mk("button","minus","−");m.type="button";m.setAttribute("aria-label","Remove tag "+nm);
-  m.onclick=e=>{e.stopPropagation();if(!confirm('Remove tag "#'+nm+'"? It will be taken off every payee.'))return;
+  m.onclick=e=>{e.stopPropagation();if(!confirm('Remove tag "'+nm+'"? It will be taken off every payee.'))return;
    const tc=Object.assign({},S.tagc),tg={};delete tc[nm];Object.keys(S.tags).forEach(k=>{const v=S.tags[k].filter(x=>x!==nm);if(v.length)tg[k]=v});formTags.delete(nm);
    setSettings({tagcolors:JSON.stringify(tc),tags:JSON.stringify(tg)})};
   r.append(i,m);l.appendChild(r)});
@@ -408,7 +408,7 @@ $("form").onsubmit=async e=>{e.preventDefault();const amount=parseFloat($("amoun
  $("amount").value="";$("reason").value="";formTags=new Set();tagTouched=false;renderTagDd();resetDt();$("amount").focus();toast("Saved to the sheet")};
 function rowFor(x,del=true){const r=mk("div","row"),t=mk("div"),d=mk("span","dot");d.style.background=x.type==="in"?"var(--ok)":color(x.cat);
  t.append(mk("div","note",x.reason||x.cat),mk("div","meta",(x.reason?x.cat+" · ":"")+fmt(x.dt)));const am=mk("span","amt",(x.type==="in"?"+":"")+money(x.amount));if(x.type==="in")am.style.color="var(--ok)";const pt=partyOf(x);if(taggable(pt)){const tg=tagsOf(x),tb=mk("button","tagb");tb.type="button";tb.title="Tags for "+pt;
-  if(tg.length)tg.forEach(v=>{const q=mk("span","tp","#"+v);q.style.color=q.style.borderColor=tcolor(v);tb.appendChild(q)});else tb.textContent="+ tag";
+  if(tg.length)tg.forEach(v=>{const q=mk("span","tp",v);q.style.color=q.style.borderColor=tcolor(v);tb.appendChild(q)});else tb.textContent="+ tag";
   tb.onclick=()=>openTagDlg(pt);t.appendChild(tb)}
  r.append(d,t,am);
  if(del){const b=mk("button","del","×");b.type="button";b.setAttribute("aria-label","Delete expense");b.onclick=()=>{if(confirm("Delete this entry from the sheet?"))api([{t:"del",id:x.id}])};r.appendChild(b)}else r.style.gridTemplateColumns="auto 1fr auto";return r}
@@ -426,8 +426,14 @@ const DW=(o,i)=>dir==="in"?i:o;
 const isDir=x=>dir==="in"?x.type==="in":x.type!=="in";
 const passF=x=>(!fTag||tagsOf(x).includes(fTag))&&(!fParty||partyOf(x).toLowerCase().includes(fParty));
 const vis=()=>fTag||fParty?S.items.filter(passF):S.items;
-function renderFilter(){const s=$("tagf"),tags=allTags();if(fTag&&!tags.includes(fTag))fTag="";s.innerHTML="";s.appendChild(new Option(tags.length?"All tags":"No tags yet",""));tags.forEach(t=>s.appendChild(new Option("#"+t,t)));s.value=fTag;$("fclr").hidden=!fTag&&!fParty}
-$("tagf").onchange=()=>{fTag=$("tagf").value;renderDash()};["out","in"].forEach(v=>$("d-"+v).onclick=()=>{dir=v;$("d-out").setAttribute("aria-selected",v==="out");$("d-in").setAttribute("aria-selected",v==="in");renderDash()});
+function renderFilter(){const tags=allTags();if(fTag&&!tags.includes(fTag))fTag="";const b=$("tagfBtn"),l=$("tagfList"),dot=v=>{const d=mk("span","dot");d.style.background=v?tcolor(v):"var(--line)";return d};
+ b.innerHTML="";b.append(dot(fTag),mk("span",null,fTag||(tags.length?"All tags":"No tags yet")),mk("span","chev","▾"));
+ l.innerHTML="";["",...tags].forEach(v=>{const i=mk("button","dd-item"),on=fTag===v;i.type="button";i.setAttribute("role","option");i.setAttribute("aria-selected",on);
+  i.append(mk("span","chk",on?"✓":""),dot(v),mk("span",null,v||"All tags"));i.onclick=()=>{fTag=v;l.hidden=true;b.setAttribute("aria-expanded","false");renderDash()};l.appendChild(i)});
+ $("fclr").hidden=true}
+$("tagfBtn").onclick=e=>{e.stopPropagation();const l=$("tagfList"),o=l.hidden;l.hidden=!o;$("tagfBtn").setAttribute("aria-expanded",o)};
+document.addEventListener("click",e=>{if(!$("tfdd").contains(e.target)){$("tagfList").hidden=true;$("tagfBtn").setAttribute("aria-expanded","false")}});
+["out","in"].forEach(v=>$("d-"+v).onclick=()=>{dir=v;$("d-out").setAttribute("aria-selected",v==="out");$("d-in").setAttribute("aria-selected",v==="in");renderDash()});
 $("fclr").onclick=()=>{fTag="";renderDash()};
 $("prev").onclick=()=>{sel=shift(sel,-1);renderDash()};$("next").onclick=()=>{if(sel<cur){sel=shift(sel,1);renderDash()}};
 function delta(c,pv,lab="last month"){const s=mk("span","dl");if(!(pv>0)){s.className="dl na";s.textContent="no prior data";return s}const ch=(c-pv)/pv*100;s.className="dl "+(ch>0?"up":"down");s.textContent=(ch>0?"▲ ":"▼ ")+Math.abs(ch).toFixed(0)+"% vs "+lab;return s}
@@ -530,7 +536,7 @@ function renderExtra(its,pits,from,n,l1,l2){
  const agg=a=>{const o={};a.forEach(x=>tagsOf(x).forEach(t=>o[t]=(o[t]||0)+x.amount));return o},ta=agg(its),tb=agg(pits),tot=sum(its.map(x=>x.amount));
  $("tagh").textContent=DW("Spending by tag","Income by tag");
  const tn=[...new Set([...Object.keys(ta),...Object.keys(tb)])].sort((x,y)=>(ta[y]||0)-(ta[x]||0));
- cmpTable($("tagk"),["Tag",l1,l2,"Change"],tn.map(t=>["#"+t,tcolor(t),ta[t]||0,tb[t]||0]),tot);
+ cmpTable($("tagk"),["Tag",l1,l2,"Change"],tn.map(t=>[t,tcolor(t),ta[t]||0,tb[t]||0]),tot);
  const un=sum(its.filter(x=>!tagsOf(x).length).map(x=>x.amount));
  if(!tn.length)$("tagk").appendChild(mk("p","empty","No tagged entries here yet. Tag a payee to see this."));
  else $("tagk").appendChild(mk("p","meta",(un>0?money(un)+" has no tag. ":"")+"An entry with two tags counts under both."));
@@ -541,7 +547,7 @@ function renderExtra(its,pits,from,n,l1,l2){
  $("dailyh").textContent=DW("Daily spending","Daily income")+" by category and tag";
  $("daily").innerHTML=dailyChart(its,from,n);
  const cats=[...new Set(its.map(x=>x.cat))],tgs=[...new Set(its.flatMap(x=>tagsOf(x)))];
- $("dleg").innerHTML='<span><b>Left bar</b>&nbsp;category:</span>'+cats.map(c=>'<span><i style="background:'+color(c)+'"></i>'+esc(c)+'</span>').join("")+'<span style="margin-left:6px"><b>Right bar</b>&nbsp;tag:</span>'+tgs.map(t=>'<span><i style="background:'+tcolor(t)+'"></i>#'+esc(t)+'</span>').join("")+(its.some(x=>!tagsOf(x).length)?'<span><i style="background:var(--line)"></i>no tag</span>':"")}
+ $("dleg").innerHTML='<span><b>Left bar</b>&nbsp;category:</span>'+cats.map(c=>'<span><i style="background:'+color(c)+'"></i>'+esc(c)+'</span>').join("")+'<span style="margin-left:6px"><b>Right bar</b>&nbsp;tag:</span>'+tgs.map(t=>'<span><i style="background:'+tcolor(t)+'"></i>'+esc(t)+'</span>').join("")+(its.some(x=>!tagsOf(x).length)?'<span><i style="background:var(--line)"></i>no tag</span>':"")}
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]);
 function dailyChart(its,from,n){
  const step=n>45?7:1,nb=Math.ceil(n/step),cat=Array.from({length:nb},()=>({})),tag=Array.from({length:nb},()=>({}));
@@ -553,7 +559,7 @@ function dailyChart(its,from,n){
  const co=order(cat),to=order(tag),lab=k=>step===1?fshort(addDays(from,k)):fshort(addDays(from,k*7))+"–"+fshort(addDays(from,Math.min(k*7+6,n-1)));
  let s='<svg viewBox="0 0 '+Wd+" "+H+'" width="'+(nb>29?Wd:"100%")+'" style="max-width:none;color:var(--mute);display:block" role="img" aria-label="'+DW("Daily spending","Daily income")+' by category and tag">';
  [0,.5,1].forEach(f=>{const v=mx/1.1*f;s+='<line x1="'+L+'" x2="'+(Wd-Rr)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" stroke="var(--line)"/><text x="'+(L-4)+'" y="'+(sy(v)+3)+'" font-size="10" text-anchor="end" fill="currentColor">'+short(v)+"</text>"});
- const stack=(d,keys,x,cf,k)=>{let y0=0;keys.forEach(key=>{const v=d[key];if(!v)return;const y1=y0+v;s+='<rect x="'+x.toFixed(1)+'" y="'+sy(y1).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(sy(y0)-sy(y1),.5).toFixed(1)+'" fill="'+cf(key)+'"><title>'+esc(lab(k)+" · "+(key||"no tag")+": "+money(v))+"</title></rect>";y0=y1})};
+ const stack=(d,keys,x,cf,k)=>{let y0=0;keys.forEach(key=>{const v=d[key];if(!v)return;const y1=y0+v;s+='<rect x="'+x.toFixed(1)+'" y="'+sy(y1).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(sy(y0)-sy(y1),.5).toFixed(1)+'" fill="'+cf(key)+'"><title>'+esc(lab(k)+" · "+(key.replace(/^#/,"")||"no tag")+": "+money(v))+"</title></rect>";y0=y1})};
  for(let k=0;k<nb;k++){const cx=L+k*slot+slot/2;stack(cat[k],co,cx-bw-1,color,k);stack(tag[k],to,cx+1,key=>key?tcolor(key.slice(1)):"var(--line)",k)}
  const ticks=nb<=10?[...Array(nb).keys()]:[0,Math.floor(nb/4),Math.floor(nb/2),Math.floor(3*nb/4),nb-1];
  ticks.forEach(k=>s+='<text x="'+(L+k*slot+slot/2)+'" y="'+(H-6)+'" font-size="10" text-anchor="middle" fill="currentColor">'+(step===1?fshort(addDays(from,k)):fshort(addDays(from,k*7)))+"</text>");
@@ -759,6 +765,8 @@ let sm=null,smT=null,smFail=null;
 const smsHash=t=>{let h=5381;for(const ch of t)h=(h*33+ch.codePointAt(0))>>>0;return "s"+h.toString(36)+t.length.toString(36)};
 function stopCd(){clearInterval(smT);smT=null;$("smscd").hidden=true}
 function closeSms(){stopCd();sm=null;$("smsov").hidden=true}
+/* only when the page was opened by a bank SMS; works in the installed app (and tabs MacroDroid opened) */
+function closeApp(){setTimeout(()=>{if(!busy&&!smFail&&!sm)window.close()},1200)}
 /* popup: category dropdown (pick one) and tag dropdown (tick several), same look as the form */
 function smsClose(){["smscList","smstList"].forEach(i=>$(i).hidden=true);["smscBtn","smstBtn"].forEach(i=>$(i).setAttribute("aria-expanded","false"))}
 const ccol=n=>sm&&sm.it.type==="in"?pcolor(n):color(n);
@@ -769,10 +777,10 @@ function renderSmsDd(){const b=$("smscBtn");b.innerHTML="";const nw=$("smsnew").
   i.append(mk("span","chk",on?"✓":""),d,mk("span",null,n));i.onclick=()=>{stopCd();sm.cat=n;$("smsnew").classList.remove("on");$("smsok").disabled=false;smsClose();renderSmsDd()};l.appendChild(i)});
  const a=mk("button","dd-add","+ New category…");a.type="button";a.onclick=()=>{stopCd();sm.cat="";smsClose();$("smsnew").classList.add("on");$("smsnn").focus();$("smsok").disabled=!$("smsnn").value.trim();renderSmsDd()};l.appendChild(a)}
 function renderSmsTags(){const b=$("smstBtn");b.innerHTML="";const sm2=mk("span","tagsum");
- if(sm.tags.size)[...sm.tags].sort().forEach(t=>{const d=mk("span","dot");d.style.background=tcolor(t);sm2.append(d,mk("span",null,"#"+t))});else sm2.appendChild(mk("span","meta","No tags"));
+ if(sm.tags.size)[...sm.tags].sort().forEach(t=>{const d=mk("span","dot");d.style.background=tcolor(t);sm2.append(d,mk("span",null,t))});else sm2.appendChild(mk("span","meta","No tags"));
  b.append(sm2,mk("span","chev","▾"));
  const l=$("smstList");l.innerHTML="";[...new Set([...allTags(),...sm.tags])].sort().forEach(n=>{const i=mk("button","dd-item"),d=mk("span","dot"),on=sm.tags.has(n);i.type="button";i.setAttribute("role","option");i.setAttribute("aria-selected",on);d.style.background=tcolor(n);
-  i.append(mk("span","chk",on?"✓":""),d,mk("span",null,"#"+n));i.onclick=()=>{stopCd();on?sm.tags.delete(n):sm.tags.add(n);renderSmsTags()};l.appendChild(i)});
+  i.append(mk("span","chk",on?"✓":""),d,mk("span",null,n));i.onclick=()=>{stopCd();on?sm.tags.delete(n):sm.tags.add(n);renderSmsTags()};l.appendChild(i)});
  const a=mk("button","dd-add","+ New tag…");a.type="button";a.onclick=()=>{stopCd();smsClose();$("smsnt").classList.add("on");$("smsntn").focus()};l.appendChild(a)}
 $("smscBtn").onclick=()=>{stopCd();const o=$("smscList").hidden;smsClose();$("smscList").hidden=!o;$("smscBtn").setAttribute("aria-expanded",o)};
 $("smstBtn").onclick=()=>{stopCd();const o=$("smstList").hidden;smsClose();$("smstList").hidden=!o;$("smstBtn").setAttribute("aria-expanded",o)};
@@ -789,7 +797,7 @@ function showSms(it,auto){
   $("smscd").hidden=false;tick();smT=setInterval(tick,100)}}
 function tagOps(it){return tagOpsFor(partyOf(it),[...sm.tags])}
 /* the row is already in the sheet as Uncategorized; closing just leaves it there */
-function dismissSms(){if(!sm)return;const ops=tagOps(sm.it);closeSms();if(ops.length)api(ops);toast("Kept in the sheet as uncategorized.")}
+async function dismissSms(){if(!sm)return;const ops=tagOps(sm.it),L=sm.launch;closeSms();if(ops.length)await api(ops);toast("Kept in the sheet as uncategorized.");if(L)closeApp()}
 $("smsx").onclick=dismissSms;
 $("smsnn").oninput=()=>{stopCd();$("smsok").disabled=!$("smsnn").value.trim();renderSmsDd()};
 $("smsok").onclick=async()=>{if(!sm)return;const it=sm.it;let cat=sm.cat;
@@ -800,19 +808,19 @@ $("smsok").onclick=async()=>{if(!sm)return;const it=sm.it;let cat=sm.cat;
  stopCd();$("smsok").disabled=true;$("smsok").textContent="Saving…";
  const j=await api(ops);$("smsok").textContent="OK";
  if(!j){$("smsok").disabled=false;return}
- closeSms();toast("Recorded "+(it.type==="in"?"+":"")+money(it.amount)+" under "+cat)};
-async function saveSms(it){
+ const L=sm.launch;closeSms();toast("Recorded "+(it.type==="in"?"+":"")+money(it.amount)+" under "+cat);if(L)closeApp()};
+async function saveSms(it,launch){
  if(!C.url){smFail=it;renderPending();openSync();return}
  const j=await api([{t:"add",item:it}]);
  if(!j){smFail=it;renderPending();return}
  smFail=null;const dup=j.dups&&j.dups[it.sms],row=S.items.find(x=>x.id===(dup||it.id));renderPending();
  if(dup&&(!row||row.cat!==UNC)){toast("This message is already in the sheet.");return}
- if(row)showSms(row,!dup)}
+ if(row){showSms(row,!dup);sm.launch=!!launch}}
 function renderPending(){const b=$("pend");b.innerHTML="";
  const line=(amt,inn,meta,btns)=>{const r=mk("div","pendrow"),t=mk("div"),a=mk("div","amt",(inn?"+":"−")+money(amt));a.style.color=inn?"var(--ok)":"var(--ink)";t.append(a,mk("div","meta",meta));r.append(t,...btns);return r};
  const btn=(txt,cls,fn,lab)=>{const x=mk("button",cls,txt);x.type="button";if(cls==="btn")x.style.padding="8px 12px";if(lab)x.setAttribute("aria-label",lab);x.onclick=fn;return x};
  if(smFail){const f=smFail;b.appendChild(mk("h2",null,"Bank message not saved yet"));b.appendChild(mk("p","meta","The sheet couldn’t be reached. Nothing is stored on this phone, so retry before you close this page."));
-  b.appendChild(line(f.amount,f.type==="in",fmt(f.dt)+" · "+f.reason,[btn("Retry","btn",()=>saveSms(f)),btn("×","del",()=>{if(confirm("Discard this message?")){smFail=null;renderPending()}},"Discard message")]))}
+  b.appendChild(line(f.amount,f.type==="in",fmt(f.dt)+" · "+f.reason,[btn("Retry","btn",()=>saveSms(f,true)),btn("×","del",()=>{if(confirm("Discard this message?")){smFail=null;renderPending()}},"Discard message")]))}
  if(legMiss.length){b.appendChild(mk("h2",null,"Entries from the old version"));
   b.appendChild(mk("p","meta",legMiss.length+(legMiss.length===1?" entry is":" entries are")+" still saved on this device and missing from the sheet. Upload them so the sheet has everything, then they’re removed from this device."));
   const r=mk("div","acts");r.style.justifyContent="flex-start";
@@ -837,7 +845,7 @@ function handleHash(){
  qs.delete("sms");qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:""));
  text=text.trim();if(!text)return false;show("add");
  const q=parseSms(text);if(!q){toast("Couldn’t read that message. You can add it manually.");return false}
- saveSms({id:newId(),dt:nowLocal(),amount:q.amount,cat:UNC,reason:q.reason,type:q.dir,sms:smsHash(text)});return true}
+ saveSms({id:newId(),dt:nowLocal(),amount:q.amount,cat:UNC,reason:q.reason,type:q.dir,sms:smsHash(text)},true);return true}
 window.addEventListener("hashchange",handleHash);
 /* installed app: when MacroDroid opens a link while the app is already running, the link arrives here instead of as a page load */
 if("launchQueue" in window)window.launchQueue.setConsumer(p=>{try{if(!p||!p.targetURL)return;const u=new URL(p.targetURL);if(u.hash&&u.hash!==location.hash){history.replaceState(null,"",u.pathname+u.search+u.hash);handleHash()}}catch(e){}});
