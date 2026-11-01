@@ -144,7 +144,11 @@ input[type=date]{min-height:44px}
 .chip2.on{background:var(--pri);color:var(--on-pri);border-color:var(--pri)}
 .cdbar{height:6px;background:var(--soft);border-radius:3px;overflow:hidden}
 .cdbar span{display:block;height:100%;width:100%;background:var(--pri)}
-.tagb{border:0;background:none;padding:2px 0 0;color:var(--pri);font-size:.78rem;font-weight:600;text-align:left;cursor:pointer}
+.tagb{display:flex;flex-wrap:wrap;gap:4px;border:0;background:none;padding:4px 0 0;color:var(--pri);font-size:.76rem;font-weight:600;text-align:left;cursor:pointer}
+.tagb .tp{border:1px solid;border-radius:99px;padding:1px 7px;background:var(--card)}
+.tchip{display:inline-flex;align-items:center;gap:6px}.chk{width:1.1em;text-align:center;color:var(--pri);font-weight:700}
+.chip2.on .dot{box-shadow:0 0 0 2px var(--on-pri)}
+.tagsum{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .fbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}.fbar select{flex:0 1 42%}.fbar input{flex:1}
 .netbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px;border-color:var(--bad);color:var(--bad);font-weight:600}
 .pendrow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -182,7 +186,9 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
     <div><label for="timeBtn">Time (24-hour)</label><div class="dd" id="tdd"><button type="button" class="dd-btn" id="timeBtn" aria-haspopup="listbox" aria-expanded="false"></button><div class="dd-panel tpanel" id="timeList" hidden><div class="tcols"><div class="tcol" id="hcol" aria-label="Hour"></div><div class="tcol" id="mcol" aria-label="Minute"></div></div></div></div></div>
     <div class="wide"><label id="catlbl">Category</label><div class="dd" id="dd"><button type="button" class="dd-btn" id="catBtn" aria-haspopup="listbox" aria-expanded="false"></button><div class="dd-panel" id="catList" role="listbox" hidden></div></div></div>
     <div class="newcat" id="newcat"><input id="newname" maxlength="20" placeholder="New category name" aria-label="New category name"><button class="btn" type="button" id="savecat">Add category</button></div>
-    <div class="wide"><label for="reason">Reason (optional)</label><input id="reason" maxlength="100" placeholder="What was this expense for?"></div>
+    <div class="wide"><label for="reason">Reason (optional)</label><input id="reason" maxlength="100" placeholder="Payee, or what it was for"></div>
+    <div class="wide"><label id="taglbl">Tags (for this payee)</label><div class="dd" id="tdd2"><button type="button" class="dd-btn" id="tagBtn" aria-haspopup="listbox" aria-expanded="false"></button><div class="dd-panel" id="tagList" role="listbox" aria-multiselectable="true" hidden></div></div></div>
+    <div class="newcat" id="newtag"><input id="newtagname" maxlength="20" placeholder="New tag name" aria-label="New tag name"><button class="btn" type="button" id="savetag">Add tag</button></div>
     <button class="btn wide" type="submit">Add expense</button>
     <p class="err wide" id="err" role="alert"></p>
   </form>
@@ -229,14 +235,15 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
   <div class="meta" id="smsk"></div>
   <div class="smsamt" id="smsamt"></div>
   <div class="meta" id="smsmeta"></div>
-  <div id="smstagw" style="margin-top:12px"><input id="smstags" maxlength="80" aria-label="Tags for this payee" autocomplete="off"></div>
-  <div class="meta" style="margin:16px 0 8px">Pick a category</div>
+    <div class="meta" style="margin:16px 0 8px">Pick a category</div>
   <div class="chips" id="smschips"></div>
   <div class="newcat" id="smsnew" style="margin-top:10px"><input id="smsnn" maxlength="20" placeholder="New category name" aria-label="New category name"></div>
+  <div id="smstagw" style="margin-top:16px"><div class="meta" id="smstagl" style="margin-bottom:8px">Tags</div><div id="smstagbox"></div></div>
   <div id="smscd" style="margin-top:14px"><div class="cdbar"><span id="cdfill"></span></div><div class="meta" id="cdtxt" style="margin-top:4px"></div></div>
   <button class="btn" id="smsok" type="button" disabled style="width:100%;margin-top:12px">OK</button>
 </div></div>
 <div class="toast" id="toast" role="status" hidden></div>
+<dialog id="tgdlg"><strong id="tgttl">Tags</strong><p class="meta" style="margin:6px 0 12px">Tags apply to every payment to and from this payee.</p><div id="tgbox"></div><div class="acts"><button class="ghost" type="button" id="tgcancel">Cancel</button><button class="btn" type="button" id="tgsave">Save</button></div></dialog>
 
 <dialog id="tdlg"><strong>Choose a theme</strong><div class="themes" id="themes"></div><div class="acts"><button class="btn" type="button" id="tdone">Done</button></div></dialog>
 
@@ -255,7 +262,7 @@ const $=id=>document.getElementById(id),p=n=>String(n).padStart(2,"0");
 const mk=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const sum=a=>a.reduce((s,v)=>s+v,0);
 /* everything below lives only in memory; the Google Sheet is the single source of truth */
-let S={items:[],cats:{},budget:0,cur:"",tags:{}},dirty=false,loaded=false;
+let S={items:[],cats:{},budget:0,cur:"",tags:{},tagc:{}},dirty=false,loaded=false;
 /* only the sheet connection and the colour theme are kept on the device */
 const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
 const lsSet=(k,v)=>{try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
@@ -298,16 +305,32 @@ const partyOf=x=>String(x.reason||"").replace(/^(to|from)\s+/i,"").trim();
 const pkey=s=>String(s).trim().toLowerCase();
 const taggable=pt=>!!pt&&pkey(pt)!=="hdfc sms";
 const tagsOf=x=>{const pt=partyOf(x);return taggable(pt)?S.tags[pkey(pt)]||[]:[]};
-const parseTags=v=>[...new Set(String(v).split(/[,#]/).map(t=>t.trim().toLowerCase()).filter(Boolean))].slice(0,8);
-const allTags=()=>[...new Set(Object.values(S.tags).flat())].sort();
-function setTags(pt,list){const k=pkey(pt);if(!taggable(pt))return;const t=Object.assign({},S.tags);if(list.length)t[k]=list;else delete t[k];return setSettings({tags:JSON.stringify(t)})}
+const normTag=v=>String(v).trim().replace(/^#+/,"").toLowerCase().slice(0,20);
+const allTags=()=>[...new Set([...Object.keys(S.tagc),...Object.values(S.tags).flat()])].sort();
+const tcolor=t=>{if(S.tagc[t])return S.tagc[t];let h=0;for(const c of t)h=(h*31+c.charCodeAt(0))>>>0;return PAL[h%PAL.length]};
+const withTag=(tc,t)=>{if(!tc[t])tc[t]=PAL[Object.keys(tc).length%PAL.length];return tc};
+/* one "set" op covering any brand-new tags plus this payee's tag list */
+function tagOpsFor(pt,list){list=[...new Set(list)].sort();const st={},tc=Object.assign({},S.tagc);let nc=false;
+ list.forEach(t=>{if(!S.tagc[t]){withTag(tc,t);nc=true}});if(nc)st.tagcolors=JSON.stringify(tc);
+ if(taggable(pt)){const k=pkey(pt),ov=(S.tags[k]||[]).slice().sort();if(list.join()!==ov.join()){const t=Object.assign({},S.tags);if(list.length)t[k]=list;else delete t[k];st.tags=JSON.stringify(t)}}
+ return Object.keys(st).length?[{t:"set",settings:st}]:[]}
+function setTags(pt,list){const ops=tagOpsFor(pt,list);return ops.length?api(ops):Promise.resolve(true)}
+/* chip picker used in the SMS popup and the tag dialog: works like the category chips, but several can be on */
+function tagPicker(box,sel,touch){box.innerHTML="";const wrap=mk("div","chips"),row=mk("div","newcat"),inp=mk("input"),add=mk("button","btn","Add tag");
+ const draw=()=>{wrap.innerHTML="";[...new Set([...allTags(),...sel])].sort().forEach(n=>{const b=mk("button","chip2 tchip"+(sel.has(n)?" on":"")),d=mk("span","dot");d.style.background=tcolor(n);b.type="button";b.setAttribute("aria-pressed",sel.has(n));b.append(d,mk("span",null,"#"+n));
+   b.onclick=()=>{if(touch)touch();sel.has(n)?sel.delete(n):sel.add(n);draw()};wrap.appendChild(b)});
+  const o=mk("button","chip2","+ New tag");o.type="button";o.onclick=()=>{if(touch)touch();row.classList.add("on");inp.focus()};wrap.appendChild(o)};
+ inp.maxLength=20;inp.placeholder="New tag name";inp.setAttribute("aria-label","New tag name");add.type="button";row.style.marginTop="10px";
+ const doAdd=()=>{const t=normTag(inp.value);if(!t)return;sel.add(t);inp.value="";row.classList.remove("on");draw()};
+ add.onclick=doAdd;inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();doAdd()}};inp.oninput=()=>{if(touch)touch()};
+ row.append(inp,add);box.append(wrap,row);draw()}
 
 /* ---- add view ---- */
 let curCat="Food";
-function closeDd(){["catList","timeList"].forEach(i=>$(i).hidden=true);$("catBtn").setAttribute("aria-expanded","false");$("timeBtn").setAttribute("aria-expanded","false")}
+function closeDd(){["catList","timeList","tagList"].forEach(i=>$(i).hidden=true);["catBtn","timeBtn","tagBtn"].forEach(i=>$(i).setAttribute("aria-expanded","false"))}
 function toggleDd(l,b){const o=$(l).hidden;closeDd();$(l).hidden=!o;$(b).setAttribute("aria-expanded",o);if(o&&l==="timeList")scrollSel()}
 $("catBtn").onclick=()=>toggleDd("catList","catBtn");$("timeBtn").onclick=()=>toggleDd("timeList","timeBtn");
-document.addEventListener("click",e=>{if(!$("dd").contains(e.target)&&!$("tdd").contains(e.target))closeDd()});
+document.addEventListener("click",e=>{if(!$("dd").contains(e.target)&&!$("tdd").contains(e.target)&&!$("tdd2").contains(e.target))closeDd()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDd()});
 function renderCats(){
  const names=Object.keys(S.cats);if(!S.cats[curCat])curCat=names[0]||"";
@@ -326,6 +349,30 @@ async function saveCat(){const name=$("newname").value.trim();if(!name){$("err")
  if(f){curCat=f;renderCats();$("newname").value="";$("newcat").classList.remove("on");return}
  if(await setSettings({cats:JSON.stringify(withCat(use))})){curCat=use;$("newname").value="";$("newcat").classList.remove("on");renderCats()}}
 $("savecat").onclick=saveCat;
+/* tags dropdown in the form: same look as categories, but you can tick several */
+let formTags=new Set(),tagTouched=false;
+$("tagBtn").onclick=()=>toggleDd("tagList","tagBtn");
+function renderTagDd(){const b=$("tagBtn");b.innerHTML="";const sm2=mk("span","tagsum");
+ if(formTags.size)[...formTags].sort().forEach(t=>{const d=mk("span","dot");d.style.background=tcolor(t);sm2.append(d,mk("span",null,"#"+t))});else sm2.appendChild(mk("span","meta","No tags"));
+ b.append(sm2,mk("span","chev","▾"));
+ const l=$("tagList");l.innerHTML="";const names=[...new Set([...allTags(),...formTags])].sort();
+ names.forEach(nm=>{const r=mk("div","dd-row"),i=mk("button","dd-item"),d=mk("span","dot"),on=formTags.has(nm);d.style.background=tcolor(nm);i.type="button";i.setAttribute("role","option");i.setAttribute("aria-selected",on);
+  i.append(mk("span","chk",on?"✓":""),d,mk("span",null,"#"+nm));
+  i.onclick=e=>{e.stopPropagation();tagTouched=true;on?formTags.delete(nm):formTags.add(nm);renderTagDd()};
+  const m=mk("button","minus","−");m.type="button";m.setAttribute("aria-label","Remove tag "+nm);
+  m.onclick=e=>{e.stopPropagation();if(!confirm('Remove tag "#'+nm+'"? It will be taken off every payee.'))return;
+   const tc=Object.assign({},S.tagc),tg={};delete tc[nm];Object.keys(S.tags).forEach(k=>{const v=S.tags[k].filter(x=>x!==nm);if(v.length)tg[k]=v});formTags.delete(nm);
+   setSettings({tagcolors:JSON.stringify(tc),tags:JSON.stringify(tg)})};
+  r.append(i,m);l.appendChild(r)});
+ if(!names.length)l.appendChild(mk("p","meta","No tags yet.")).style.padding="6px 10px";
+ const a=mk("button","dd-add","+ Add new tag…");a.type="button";a.onclick=()=>{closeDd();$("newtag").classList.add("on");$("newtagname").focus()};l.appendChild(a)}
+async function saveTag(){const t=normTag($("newtagname").value);if(!t){$("err").textContent="Type a tag name first.";return}$("err").textContent="";
+ const done=()=>{formTags.add(t);tagTouched=true;$("newtagname").value="";$("newtag").classList.remove("on");renderTagDd()};
+ if(S.tagc[t]){done();return}
+ if(await setSettings({tagcolors:JSON.stringify(withTag(Object.assign({},S.tagc),t))}))done()}
+$("savetag").onclick=saveTag;$("newtagname").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();saveTag()}};
+/* typing a payee you have tagged before pre-fills its tags */
+$("reason").addEventListener("change",()=>{if(tagTouched)return;const pt=$("reason").value.trim();formTags=new Set(taggable(pt)?S.tags[pkey(pt)]||[]:[]);renderTagDd()});
 $("newname").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();saveCat()}};
 let tH="00",tM="00";
 function scrollSel(){document.querySelectorAll("#timeList .on").forEach(o=>{o.parentElement.scrollTop=Math.max(o.offsetTop-70,0)})}
@@ -341,14 +388,20 @@ $("form").onsubmit=async e=>{e.preventDefault();const amount=parseFloat($("amoun
  if(!C.url){openSync();return}
  $("err").textContent="";const sb=$("form").querySelector("[type=submit]");sb.disabled=true;sb.textContent="Saving to sheet…";
  const it={id:newId(),dt:$("d").value+"T"+tH+":"+tM,amount,cat,reason:$("reason").value.trim(),type:"out"};
- const ok=await api([{t:"add",item:it}]);sb.disabled=false;sb.textContent="Add expense";
+ if(formTags.size&&!taggable(it.reason)){sb.disabled=false;sb.textContent="Add expense";$("err").textContent="Type the payee in Reason so the tags have someone to belong to.";return}
+ const ok=await api([{t:"add",item:it},...tagOpsFor(it.reason,[...formTags])]);sb.disabled=false;sb.textContent="Add expense";
  if(!ok){$("err").textContent="Not saved: couldn’t reach the sheet. Your entry is still in the form, so try again.";return}
- $("amount").value="";$("reason").value="";resetDt();$("amount").focus();toast("Saved to the sheet")};
+ $("amount").value="";$("reason").value="";formTags=new Set();tagTouched=false;renderTagDd();resetDt();$("amount").focus();toast("Saved to the sheet")};
 function rowFor(x,del=true){const r=mk("div","row"),t=mk("div"),d=mk("span","dot");d.style.background=x.type==="in"?"var(--ok)":color(x.cat);
- t.append(mk("div","note",x.reason||x.cat),mk("div","meta",(x.reason?x.cat+" · ":"")+fmt(x.dt)));const am=mk("span","amt",(x.type==="in"?"+":"")+money(x.amount));if(x.type==="in")am.style.color="var(--ok)";const pt=partyOf(x);if(taggable(pt)){const tg=tagsOf(x),tb=mk("button","tagb",tg.length?tg.map(v=>"#"+v).join(" "):"+ tag");tb.type="button";tb.title="Tags for "+pt;
-  tb.onclick=()=>{const v=prompt("Tags for "+pt+" (comma-separated)",tg.join(", "));if(v===null)return;setTags(pt,parseTags(v))};t.appendChild(tb)}
+ t.append(mk("div","note",x.reason||x.cat),mk("div","meta",(x.reason?x.cat+" · ":"")+fmt(x.dt)));const am=mk("span","amt",(x.type==="in"?"+":"")+money(x.amount));if(x.type==="in")am.style.color="var(--ok)";const pt=partyOf(x);if(taggable(pt)){const tg=tagsOf(x),tb=mk("button","tagb");tb.type="button";tb.title="Tags for "+pt;
+  if(tg.length)tg.forEach(v=>{const q=mk("span","tp","#"+v);q.style.color=q.style.borderColor=tcolor(v);tb.appendChild(q)});else tb.textContent="+ tag";
+  tb.onclick=()=>openTagDlg(pt);t.appendChild(tb)}
  r.append(d,t,am);
  if(del){const b=mk("button","del","×");b.type="button";b.setAttribute("aria-label","Delete expense");b.onclick=()=>{if(confirm("Delete this entry from the sheet?"))api([{t:"del",id:x.id}])};r.appendChild(b)}else r.style.gridTemplateColumns="auto 1fr auto";return r}
+let tgPt="",tgSel=new Set();
+function openTagDlg(pt){tgPt=pt;tgSel=new Set(S.tags[pkey(pt)]||[]);$("tgttl").textContent="Tags for "+pt;tagPicker($("tgbox"),tgSel);$("tgdlg").showModal()}
+$("tgcancel").onclick=()=>$("tgdlg").close();
+$("tgsave").onclick=async()=>{const b=$("tgsave");b.disabled=true;const ok=await setTags(tgPt,[...tgSel]);b.disabled=false;if(ok)$("tgdlg").close()};
 function renderRecent(){const b=$("recent");b.innerHTML="";const l=[...S.items].sort((a,b)=>b.dt.localeCompare(a.dt)||b.id-a.id).slice(0,5);
  if(!l.length)b.appendChild(mk("p","empty",loaded?"Your entries will show up here.":C.url?"Loading from your sheet…":"Connect a Google Sheet to start: ⋮ › Google Sheet sync."));l.forEach(x=>b.appendChild(rowFor(x)))}
 function renderStrip(){}
@@ -598,6 +651,7 @@ function apply(j){
  S.items=items;const st=j.settings||{};
  let c={};try{c=JSON.parse(st.cats||"{}")}catch(e){}S.cats=c&&typeof c==="object"?c:{};delete S.cats[UNC];if(!Object.keys(S.cats).length)DEF.forEach(addCat);
  let t={};try{t=JSON.parse(st.tags||"{}")}catch(e){}S.tags=t&&typeof t==="object"?t:{};
+ let tc={};try{tc=JSON.parse(st.tagcolors||"{}")}catch(e){}S.tagc=tc&&typeof tc==="object"?tc:{};
  S.budget=+st.budget||0;S.cur=st.cur||"";loaded=true;
  const L=legacy();if(L){const have=new Set(items.map(x=>x.id));legMiss=L.its.filter(x=>x.amount>0&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(x.dt||"")&&!have.has(x.id));if(!legMiss.length)lsSet(LEG,null)}
  renderAll()}
@@ -606,7 +660,7 @@ async function api(ops){try{const j=await call({ops});net("");apply(j);return j}
 /* read only */
 async function load(manual,quiet){try{const j=await call(null);net("");apply(j);if(manual)toast("Up to date with the sheet");return true}catch(e){fail(e,()=>load(true),quiet);return false}}
 const setSettings=o=>api([{t:"set",settings:o}]);
-function renderAll(){renderCats();renderRecent();renderPending();updBudgetBtn();if(!$("v-dash").hidden)renderDash()}
+function renderAll(){renderCats();renderTagDd();renderRecent();renderPending();updBudgetBtn();if(!$("v-dash").hidden)renderDash()}
 function scriptText(){return SCRIPT.replace("__SECRET__",($("skey").value||"your-secret").replace(/[^A-Za-z0-9_-]/g,""))}
 function rand(){const a=new Uint8Array(12);crypto.getRandomValues(a);return Array.from(a,x=>"abcdefghjkmnpqrstuvwxyz23456789"[x%31]).join("")}
 const setupLink=()=>location.origin+location.pathname+"#connect="+encodeURIComponent(C.url)+"|"+encodeURIComponent(C.key);
@@ -621,7 +675,7 @@ $("sf").onsubmit=async e=>{e.preventDefault();const url=$("surl").value.trim(),k
 $("skey").oninput=()=>$("stxt").value=scriptText();
 $("scopy").onclick=async()=>{const t=$("stxt");t.value=scriptText();try{await navigator.clipboard.writeText(t.value);toast("Script copied")}catch(e){t.select();toast("Select and copy the script")}};
 $("slink").onclick=async()=>{try{await navigator.clipboard.writeText(setupLink());toast("Setup link copied. Open it on your other device.")}catch(e){prompt("Copy this link and open it on your other device:",setupLink())}};
-$("sdis").onclick=()=>{C={url:"",key:""};lsSet(CONN,null);S={items:[],cats:{},budget:0,cur:"",tags:{}};DEF.forEach(addCat);loaded=false;$("sdlg").close();renderAll();net("Not connected to a sheet. Open ⋮ › Google Sheet sync.")};
+$("sdis").onclick=()=>{C={url:"",key:""};lsSet(CONN,null);S={items:[],cats:{},budget:0,cur:"",tags:{},tagc:{}};DEF.forEach(addCat);loaded=false;$("sdlg").close();renderAll();net("Not connected to a sheet. Open ⋮ › Google Sheet sync.")};
 $("scancel").onclick=()=>$("sdlg").close();
 $("miSync").onclick=openSync;$("refreshBtn").onclick=()=>load(true);
 
@@ -652,13 +706,11 @@ function showSms(it,auto){
  $("smsk").textContent=inn?"HDFC · money received":"HDFC · money spent";
  $("smsamt").textContent=(inn?"+":"−")+money(it.amount);$("smsamt").style.color=inn?"var(--ok)":"var(--ink)";
  $("smsmeta").textContent=new Date(it.dt).toLocaleString(undefined,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hour12:false})+" · "+it.reason;
- const pt=partyOf(it),tw=taggable(pt);$("smstagw").hidden=!tw;$("smstags").value=tw?(S.tags[pkey(pt)]||[]).join(", "):"";$("smstags").placeholder=tw?"Tags for "+pt+" (e.g. friends, bar)":"";
+ const pt=partyOf(it),tw=taggable(pt);sm.tags=new Set(tw?S.tags[pkey(pt)]||[]:[]);$("smstagw").hidden=!tw;$("smstagl").textContent="Tags for "+pt;if(tw)tagPicker($("smstagbox"),sm.tags,stopCd);
  $("smsnew").classList.remove("on");$("smsnn").value="";$("smsok").disabled=true;renderChips();stopCd();
  if(auto){const end=Date.now()+10000,tick=()=>{const r=Math.max(end-Date.now(),0);$("cdfill").style.width=r/100+"%";$("cdtxt").textContent="Saved in the sheet. Closing in "+Math.ceil(r/1000)+"s; categorize it later if you like.";if(r<=0)dismissSms()};
   $("smscd").hidden=false;tick();smT=setInterval(tick,100)}}
-function tagOps(it){const pt=partyOf(it);if(!taggable(pt))return[];const nv=parseTags($("smstags").value),ov=S.tags[pkey(pt)]||[];if(nv.join()===ov.join())return[];
- const t=Object.assign({},S.tags);if(nv.length)t[pkey(pt)]=nv;else delete t[pkey(pt)];return[{t:"set",settings:{tags:JSON.stringify(t)}}]}
-$("smstags").oninput=stopCd;
+function tagOps(it){return tagOpsFor(partyOf(it),[...sm.tags])}
 /* the row is already in the sheet as Uncategorized; closing just leaves it there */
 function dismissSms(){if(!sm)return;const ops=tagOps(sm.it);closeSms();if(ops.length)api(ops);toast("Kept in the sheet as uncategorized.")}
 $("smsx").onclick=dismissSms;
@@ -700,13 +752,21 @@ function handleHash(){
  if(h.startsWith("connect=")){const v=h.slice(8).split("|");history.replaceState(null,"",location.pathname+location.search);
   try{const url=decodeURIComponent(v[0]),key=decodeURIComponent(v[1]||"");if(/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){connect(url,key).then(ok=>{if(ok)toast("This device is now connected to your sheet")});return true}}catch(e){}
   toast("That setup link is incomplete.");return false}
- const i=h.indexOf("sms=");if(i<0)return false;
- const raw=h.slice(i+4);let text;try{text=decodeURIComponent(raw.replace(/\+/g," "))}catch(e){text=raw}
- history.replaceState(null,"",location.pathname+location.search);
+ /* the message can arrive as #sms=… or ?sms=… (the installed app passes the ?sms= form more reliably) */
+ const qs=new URLSearchParams(location.search),i=h.indexOf("sms=");let text;
+ if(qs.has("sms")){text=qs.get("sms")||""}
+ else if(i>=0){const raw=h.slice(i+4);try{text=decodeURIComponent(raw.replace(/\+/g," "))}catch(e){text=raw}}
+ else return false;
+ qs.delete("sms");qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:""));
  text=text.trim();if(!text)return false;show("add");
  const q=parseSms(text);if(!q){toast("Couldn’t read that message. You can add it manually.");return false}
  saveSms({id:newId(),dt:nowLocal(),amount:q.amount,cat:UNC,reason:q.reason,type:q.dir,sms:smsHash(text)});return true}
 window.addEventListener("hashchange",handleHash);
+/* installed app: when MacroDroid opens a link while the app is already running, the link arrives here instead of as a page load */
+if("launchQueue" in window)window.launchQueue.setConsumer(p=>{try{if(!p||!p.targetURL)return;const u=new URL(p.targetURL);if(u.hash&&u.hash!==location.hash){history.replaceState(null,"",u.pathname+u.search+u.hash);handleHash()}}catch(e){}});
+/* some Android versions bring the app forward with the new link already in the address but fire no event */
+addEventListener("pageshow",()=>{if(location.hash.length>1||location.search.includes("sms="))handleHash()});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&(location.hash.length>1||location.search.includes("sms=")))handleHash()});
 
 function incCard(list,spent){const b=$("inc");b.innerHTML="";b.hidden=!list.length;if(!list.length)return;const t=sum(list.map(x=>x.amount));
  const a=mk("div","card kpi");a.append(mk("div","meta","Money received"),mk("b",null,"+"+money(t)),mk("span","dl na",list.length+(list.length===1?" credit":" credits")));
