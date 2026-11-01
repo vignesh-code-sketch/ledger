@@ -563,7 +563,7 @@ function parseSms(t){
  const ci=idx(/credited|received|deposited|credit of/),di=idx(/debited|spent|sent|paid|withdrawn|purchase|debit of/);
  if(ci===1e9&&di===1e9)return null;
  const dir=ci<di?"in":"out";
- const v=t.match(/VPA\s+([\w.\-]+@[\w.\-]+)/i),m2=t.match(/\b(?:to|at)\s+([A-Za-z0-9][A-Za-z0-9 &.\-]{1,28}?)\s+(?:on|ref|using)\b/i);
+ const v=t.match(/VPA\s+\*?([\w.\-]+@[\w.\-]+)/i),m2=t.match(/\b(?:to|at)\s+([A-Za-z0-9][A-Za-z0-9 &.\-]{1,28}?)\s+(?:on|ref|using)\b/i);
  let who="";if(v)who=v[1];else if(m2&&!/^(a\/c|account|hdfc)/i.test(m2[1]))who=m2[1].trim();
  return{amount:amt,dir,reason:who?(dir==="in"?"From ":"To ")+who:"HDFC SMS"}}
 let sm=null,smT=null;
