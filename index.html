@@ -167,7 +167,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 </head>
 <body>
 <nav class="top"><div class="bar">
-  <div class="tabs" role="tablist" aria-label="View"><button role="tab" id="t-add" aria-selected="true">Add expense</button><button role="tab" id="t-dash" aria-selected="false">Dashboard</button></div>
+  <div class="tabs" role="tablist" aria-label="View"><button role="tab" id="t-add" aria-selected="true">Add entry</button><button role="tab" id="t-dash" aria-selected="false">Dashboard</button></div>
   <button class="nb kb" id="refreshBtn" type="button" aria-label="Reload from Google Sheet" title="Reload from Google Sheet"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
   <div class="menuwrap" id="mw">
     <button class="nb kb" id="menuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More options"><svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true"><circle cx="9" cy="3" r="1.8"/><circle cx="9" cy="9" r="1.8"/><circle cx="9" cy="15" r="1.8"/></svg></button>
@@ -185,6 +185,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 <section id="v-add">
   <div class="card" id="pend" style="margin-bottom:12px" hidden></div>
   <form id="form" class="card">
+    <div class="wide"><div class="seg" role="tablist" aria-label="Entry type" style="display:inline-flex"><button type="button" id="f-out" aria-selected="true">Money out</button><button type="button" id="f-in" aria-selected="false">Money in</button></div></div>
     <div class="wide"><label for="amount">Amount</label><input id="amount" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" required></div>
     <div><label for="d">Date</label><input id="d" type="date" required></div>
     <div><label for="timeBtn">Time (24-hour)</label><div class="dd" id="tdd"><button type="button" class="dd-btn" id="timeBtn" aria-haspopup="listbox" aria-expanded="false"></button><div class="dd-panel tpanel" id="timeList" hidden><div class="tcols"><div class="tcol" id="hcol" aria-label="Hour"></div><div class="tcol" id="mcol" aria-label="Minute"></div></div></div></div></div>
@@ -193,7 +194,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
     <div class="wide"><label for="reason">Reason (optional)</label><input id="reason" maxlength="100" placeholder="Payee, or what it was for"></div>
     <div class="wide"><label id="taglbl">Tags (for this payee)</label><div class="dd" id="tdd2"><button type="button" class="dd-btn" id="tagBtn" aria-haspopup="listbox" aria-expanded="false"></button><div class="dd-panel" id="tagList" role="listbox" aria-multiselectable="true" hidden></div></div></div>
     <div class="newcat" id="newtag"><input id="newtagname" maxlength="20" placeholder="New tag name" aria-label="New tag name"><button class="btn" type="button" id="savetag">Add tag</button></div>
-    <button class="btn wide" type="submit">Add expense</button>
+    <button class="btn wide" type="submit" id="fsub">Add expense</button>
     <p class="err wide" id="err" role="alert"></p>
   </form>
   <div class="card" style="margin-top:12px"><h2>Latest entries</h2><div id="recent"></div></div>
@@ -266,7 +267,7 @@ details{margin-top:12px}summary{cursor:pointer;font-weight:600}
 </form></dialog>
 
 <script>
-const APPVER="v10",BOOT=location.href;
+const APPVER="v11",BOOT=location.href;
 const LEG="expense-tracker-v2",LEG1="expense-tracker-v1",CONN="ledger-conn",THM="ledger-theme",UNC="Uncategorized";
 const PAL=["#8f6334","#6b8f5e","#c9822b","#b0443a","#8a6a8f","#4f8a8b","#c26a7a","#8a9a3b","#6b5b4b","#d19a5c"];
 const DEF=["Food","Transport","Bills","Shopping","Health","Fun","Other"];
@@ -340,14 +341,20 @@ function tagPicker(box,sel,touch){box.innerHTML="";const wrap=mk("div","chips"),
  row.append(inp,add);box.append(wrap,row);draw()}
 
 /* ---- add view ---- */
-let curCat="Food";
+let curCat="Food",fIn=false,inExtra=[],catOut="Food",catIn="Salary";
+/* the form records money out (expense) or money in (credit) */
+const fLabel=()=>fIn?"Add credit":"Add expense";
+function setFDir(v){if(v===fIn)return;if(fIn)catIn=curCat;else catOut=curCat;fIn=v;curCat=fIn?catIn:catOut;
+ $("f-out").setAttribute("aria-selected",!fIn);$("f-in").setAttribute("aria-selected",fIn);$("fsub").textContent=fLabel();
+ $("reason").placeholder=fIn?"From whom, or what it was for":"Payee, or what it was for";$("newcat").classList.remove("on");$("err").textContent="";renderCats()}
+$("f-out").onclick=()=>setFDir(false);$("f-in").onclick=()=>setFDir(true);
 function closeDd(){["catList","timeList","tagList"].forEach(i=>$(i).hidden=true);["catBtn","timeBtn","tagBtn"].forEach(i=>$(i).setAttribute("aria-expanded","false"))}
 function toggleDd(l,b){const o=$(l).hidden;closeDd();$(l).hidden=!o;$(b).setAttribute("aria-expanded",o);if(o&&l==="timeList")scrollSel()}
 $("catBtn").onclick=()=>toggleDd("catList","catBtn");$("timeBtn").onclick=()=>toggleDd("timeList","timeBtn");
 document.addEventListener("click",e=>{if(!$("dd").contains(e.target)&&!$("tdd").contains(e.target)&&!$("tdd2").contains(e.target))closeDd()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDd()});
 function renderCats(){
- const names=Object.keys(S.cats);if(!S.cats[curCat])curCat=names[0]||"";
+ const names=fIn?[...new Set([...inCats(),...inExtra])]:Object.keys(S.cats);if(!names.includes(curCat))curCat=names[0]||"";
  const b=$("catBtn");b.innerHTML="";
  if(curCat){const d=mk("span","dot");d.style.background=color(curCat);b.append(d,mk("span",null,curCat))}else b.appendChild(mk("span",null,"No categories yet"));
  b.appendChild(mk("span","chev","▾"));
@@ -356,9 +363,10 @@ function renderCats(){
   i.onclick=()=>{curCat=nm;closeDd();renderCats()};
   const m=mk("button","minus","−");m.type="button";m.setAttribute("aria-label","Remove "+nm);
   m.onclick=e=>{e.stopPropagation();if(confirm('Remove "'+nm+'"? Past expenses keep their category name.')){const c=Object.assign({},S.cats);delete c[nm];setSettings({cats:JSON.stringify(c)})}};
-  r.append(i,m);l.appendChild(r)});
+  if(fIn)m.style.visibility="hidden";r.append(i,m);l.appendChild(r)});
  const a=mk("button","dd-add","+ Add new category…");a.type="button";a.onclick=()=>{closeDd();$("newcat").classList.add("on");$("newname").focus()};l.appendChild(a)}
 async function saveCat(){const name=$("newname").value.trim();if(!name){$("err").textContent="Type a category name first.";return}
+ if(fIn){const f=[...inCats(),...inExtra].find(c=>c.toLowerCase()===name.toLowerCase());if(!f)inExtra.push(name);curCat=f||name;$("newname").value="";$("newcat").classList.remove("on");$("err").textContent="";renderCats();return}
  const f=Object.keys(S.cats).find(c=>c.toLowerCase()===name.toLowerCase()),use=f||name;$("err").textContent="";
  if(f){curCat=f;renderCats();$("newname").value="";$("newcat").classList.remove("on");return}
  if(await setSettings({cats:JSON.stringify(withCat(use))})){curCat=use;$("newname").value="";$("newcat").classList.remove("on");renderCats()}}
@@ -401,11 +409,11 @@ $("form").onsubmit=async e=>{e.preventDefault();const amount=parseFloat($("amoun
  if(!$("d").value){$("err").textContent="Pick a date.";return}
  if(!C.url){openSync();return}
  $("err").textContent="";const sb=$("form").querySelector("[type=submit]");sb.disabled=true;sb.textContent="Saving to sheet…";
- const it={id:newId(),dt:$("d").value+"T"+tH+":"+tM,amount,cat,reason:$("reason").value.trim(),type:"out"};
- if(formTags.size&&!taggable(it.reason)){sb.disabled=false;sb.textContent="Add expense";$("err").textContent="Type the payee in Reason so the tags have someone to belong to.";return}
- const ok=await api([{t:"add",item:it},...tagOpsFor(it.reason,[...formTags])]);sb.disabled=false;sb.textContent="Add expense";
+ const it={id:newId(),dt:$("d").value+"T"+tH+":"+tM,amount,cat,reason:$("reason").value.trim(),type:fIn?"in":"out"};
+ if(formTags.size&&!taggable(it.reason)){sb.disabled=false;sb.textContent=fLabel();$("err").textContent="Type the payee in Reason so the tags have someone to belong to.";return}
+ const ok=await api([{t:"add",item:it},...tagOpsFor(it.reason,[...formTags])]);sb.disabled=false;sb.textContent=fLabel();
  if(!ok){$("err").textContent="Not saved: couldn’t reach the sheet. Your entry is still in the form, so try again.";return}
- $("amount").value="";$("reason").value="";formTags=new Set();tagTouched=false;renderTagDd();resetDt();$("amount").focus();toast("Saved to the sheet")};
+ $("amount").value="";$("reason").value="";formTags=new Set();tagTouched=false;renderTagDd();resetDt();$("amount").focus();toast((fIn?"Credit":"Expense")+" saved to the sheet")};
 function rowFor(x,del=true){const r=mk("div","row"),t=mk("div"),d=mk("span","dot");d.style.background=x.type==="in"?"var(--ok)":color(x.cat);
  t.append(mk("div","note",x.reason||x.cat),mk("div","meta",(x.reason?x.cat+" · ":"")+fmt(x.dt)));const am=mk("span","amt",(x.type==="in"?"+":"")+money(x.amount));if(x.type==="in")am.style.color="var(--ok)";const pt=partyOf(x);if(taggable(pt)){const tg=tagsOf(x),tb=mk("button","tagb");tb.type="button";tb.title="Tags for "+pt;
   if(tg.length)tg.forEach(v=>{const q=mk("span","tp",v);q.style.color=q.style.borderColor=tcolor(v);tb.appendChild(q)});else tb.textContent="+ tag";
